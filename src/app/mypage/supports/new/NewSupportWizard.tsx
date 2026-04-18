@@ -68,8 +68,7 @@ export default function NewSupportWizard({ horses, plans, existingHorseIds, disa
                 <label
                   key={h.id}
                   className={`border-2 rounded-xl p-3 flex items-center gap-3 cursor-pointer
-                    ${horseId === h.id ? "border-brand bg-brand-50" : "border-surface-line"}
-                    ${owned ? "opacity-60" : ""}`}
+                    ${horseId === h.id ? "border-brand bg-brand-50" : "border-surface-line"}`}
                 >
                   <input
                     type="radio"
@@ -80,7 +79,10 @@ export default function NewSupportWizard({ horses, plans, existingHorseIds, disa
                     disabled={disabled}
                   />
                   <div className="flex-1">
-                    <p className="font-bold">{h.name}{owned && <span className="chip-warn ml-2">支援中</span>}</p>
+                    <p className="font-bold">
+                      {h.name}
+                      {owned && <span className="chip-warn ml-2">支援中（口数を追加）</span>}
+                    </p>
                     <p className="text-xs text-ink-soft line-clamp-2">{h.profile ?? ""}</p>
                   </div>
                 </label>

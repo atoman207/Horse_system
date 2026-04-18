@@ -32,6 +32,17 @@ export default async function CustomerDetail({ params }: { params: { id: string 
   const c: any = customer;
   const s: any = summary;
 
+  const supportIds = (supports ?? []).map((x: any) => x.id);
+  const { data: supportAudits } = supportIds.length
+    ? await supabase
+        .from("audit_logs")
+        .select("id, action, target_id, meta, created_at")
+        .eq("target_table", "support_subscriptions")
+        .in("target_id", supportIds)
+        .order("created_at", { ascending: false })
+        .limit(100)
+    : { data: [] as any[] };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -97,6 +108,49 @@ export default async function CustomerDetail({ params }: { params: { id: string 
             {(supports ?? []).length === 0 && <tr><td colSpan={6} className="text-center text-ink-mute py-3">支援履歴はまだありません。</td></tr>}
           </tbody>
         </table>
+      </section>
+
+      <section className="card">
+        <h2 className="section-title">支援の変更・停止履歴</h2>
+        {(supportAudits ?? []).length === 0 ? (
+          <p className="text-ink-mute text-sm">変更・停止の履歴はまだありません。</p>
+        ) : (
+          <table className="table">
+            <thead><tr><th>日時</th><th>種別</th><th>対象馬</th><th>内容</th></tr></thead>
+            <tbody>
+              {(supportAudits ?? []).map((a: any) => {
+                const m = a.meta ?? {};
+                const kind =
+                  a.action === "support.create" ? "新規追加" :
+                  a.action === "support.update" ? "変更" :
+                  a.action === "support.cancel" ? "停止" : a.action;
+                let detail = "—";
+                if (a.action === "support.create") {
+                  detail = `${formatUnits(m.units)} / ${formatYen(m.monthly)}`;
+                } else if (a.action === "support.update") {
+                  const from = `${formatUnits(m.prev_units)} (${formatYen(m.prev_monthly)})`;
+                  const to = `${formatUnits(m.units)} (${formatYen(m.monthly)})`;
+                  detail = `${from} → ${to}`;
+                } else if (a.action === "support.cancel") {
+                  detail = `${formatUnits(m.units)} / ${formatYen(m.monthly)} を停止`;
+                }
+                return (
+                  <tr key={a.id}>
+                    <td>{formatDate(a.created_at, true)}</td>
+                    <td>
+                      <span className={
+                        a.action === "support.create" ? "chip-ok" :
+                        a.action === "support.cancel" ? "chip-error" : "chip-warn"
+                      }>{kind}</span>
+                    </td>
+                    <td>{m.horse_name ?? "—"}</td>
+                    <td className="text-sm">{detail}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </section>
 
       <section className="card">

@@ -6,6 +6,16 @@ export const dynamic = "force-dynamic";
 
 type AnyRow = Record<string, any>;
 
+/**
+ * Admin cross-search.
+ *
+ * 1. Build candidate `customer_ids` / `horse_ids` at the DB layer from the
+ *    keyword (name / kana / email / phone / address / memo body / stripe id).
+ * 2. Fan out to every related table filtering by those id sets + direct
+ *    field matches. No in-memory `String.includes` filtering.
+ * 3. `admin_memos` (internal memos) are now a first-class scope AND feed
+ *    the customer-id pool so memo hits surface everywhere.
+ */
 export default async function AdminSearchPage({
   searchParams,
 }: {
@@ -21,23 +31,27 @@ export default async function AdminSearchPage({
   let bookings: AnyRow[] = [];
   let payments: AnyRow[] = [];
   let horses: AnyRow[] = [];
+  let memos: AnyRow[] = [];
 
   if (q.length > 0) {
     const like = `%${q.replace(/[%_]/g, (m) => `\\${m}`)}%`;
-    const wantsCustomers = scope === "all" || scope === "customers";
-    const wantsSupports = scope === "all" || scope === "supports";
-    const wantsDonations = scope === "all" || scope === "donations";
-    const wantsBookings = scope === "all" || scope === "bookings";
-    const wantsPayments = scope === "all" || scope === "payments";
-    const wantsHorses = scope === "all" || scope === "horses";
+    const wantsAll = scope === "all";
+    const wantsCustomers = wantsAll || scope === "customers";
+    const wantsSupports = wantsAll || scope === "supports";
+    const wantsDonations = wantsAll || scope === "donations";
+    const wantsBookings = wantsAll || scope === "bookings";
+    const wantsPayments = wantsAll || scope === "payments";
+    const wantsHorses = wantsAll || scope === "horses";
+    const wantsMemos = wantsAll || scope === "memos";
 
-    const tasks: Array<() => Promise<void>> = [];
-
-    if (wantsCustomers) {
-      tasks.push(async () => {
-        const { data } = await supabase
+    // --- 1. Candidate pools -------------------------------------------------
+    const [{ data: custMatches }, { data: horseMatches }, { data: memoMatches }] =
+      await Promise.all([
+        supabase
           .from("customers")
-          .select("id, full_name, full_name_kana, email, phone, status, avatar_url, joined_at")
+          .select(
+            "id, full_name, full_name_kana, email, phone, status, avatar_url, joined_at",
+          )
           .or(
             [
               `full_name.ilike.${like}`,
@@ -47,116 +61,142 @@ export default async function AdminSearchPage({
               `postal_code.ilike.${like}`,
               `address1.ilike.${like}`,
               `address2.ilike.${like}`,
+              `stripe_customer_id.ilike.${like}`,
             ].join(","),
           )
           .order("full_name")
-          .limit(50);
-        customers = (data as AnyRow[]) ?? [];
-      });
-    }
-
-    if (wantsHorses) {
-      tasks.push(async () => {
-        const { data } = await supabase
+          .limit(200),
+        supabase
           .from("horses")
-          .select("id, name, name_kana, sex, birth_year, profile")
-          .or([`name.ilike.${like}`, `name_kana.ilike.${like}`, `profile.ilike.${like}`].join(","))
+          .select("id, name, name_kana, sex, birth_year, profile, sort_order")
+          .or(
+            [`name.ilike.${like}`, `name_kana.ilike.${like}`, `profile.ilike.${like}`].join(","),
+          )
           .order("sort_order")
-          .limit(30);
-        horses = (data as AnyRow[]) ?? [];
-      });
+          .limit(100),
+        supabase
+          .from("admin_memos")
+          .select("id, customer_id, slot, body, updated_at, customer:customers(id, full_name, email)")
+          .ilike("body", like)
+          .order("updated_at", { ascending: false })
+          .limit(100),
+      ]);
+
+    const candidateCustomers = (custMatches as AnyRow[]) ?? [];
+    const candidateHorses = (horseMatches as AnyRow[]) ?? [];
+    const candidateMemos = (memoMatches as AnyRow[]) ?? [];
+
+    // Merge customer ids from memo hits so downstream scopes pick them up.
+    const customerIdSet = new Set<string>(candidateCustomers.map((c) => c.id));
+    for (const m of candidateMemos) {
+      if (m.customer_id) customerIdSet.add(m.customer_id);
     }
+    const horseIdSet = new Set<string>(candidateHorses.map((h) => h.id));
+    const customerIds = [...customerIdSet];
+    const horseIds = [...horseIdSet];
+
+    if (wantsCustomers) {
+      // Pull ALL customers hit through direct fields OR memo matches.
+      if (customerIds.length > 0) {
+        const { data } = await supabase
+          .from("customers")
+          .select("id, full_name, full_name_kana, email, phone, status, avatar_url, joined_at")
+          .in("id", customerIds)
+          .order("full_name")
+          .limit(100);
+        customers = (data as AnyRow[]) ?? [];
+      } else {
+        customers = [];
+      }
+    }
+    if (wantsHorses) horses = candidateHorses;
+    if (wantsMemos) memos = candidateMemos;
+
+    const tasks: Array<() => Promise<void>> = [];
 
     if (wantsSupports) {
       tasks.push(async () => {
+        const orParts: string[] = [];
+        if (customerIds.length > 0) orParts.push(`customer_id.in.(${customerIds.join(",")})`);
+        if (horseIds.length > 0) orParts.push(`horse_id.in.(${horseIds.join(",")})`);
+        if (orParts.length === 0) {
+          supports = [];
+          return;
+        }
         const { data } = await supabase
           .from("support_subscriptions")
           .select(
             "id, units, monthly_amount, status, started_at, canceled_at, customer:customers(id, full_name, email), horse:horses(id, name)",
           )
+          .or(orParts.join(","))
           .order("started_at", { ascending: false })
-          .limit(500);
-        const items = (data as AnyRow[]) ?? [];
-        const needle = q.toLowerCase();
-        supports = items.filter(
-          (x) =>
-            (x.horse?.name ?? "").toLowerCase().includes(needle) ||
-            (x.customer?.full_name ?? "").toLowerCase().includes(needle) ||
-            (x.customer?.email ?? "").toLowerCase().includes(needle),
-        );
+          .limit(200);
+        supports = (data as AnyRow[]) ?? [];
       });
     }
 
     if (wantsDonations) {
       tasks.push(async () => {
+        const orParts: string[] = [
+          `donor_name.ilike.${like}`,
+          `donor_email.ilike.${like}`,
+          `message.ilike.${like}`,
+          `stripe_payment_intent_id.ilike.${like}`,
+        ];
+        if (customerIds.length > 0) orParts.push(`customer_id.in.(${customerIds.join(",")})`);
         const { data } = await supabase
           .from("donations")
           .select(
             "id, amount, message, status, donated_at, donor_name, donor_email, customer:customers(id, full_name, email)",
           )
-          .or(
-            [
-              `donor_name.ilike.${like}`,
-              `donor_email.ilike.${like}`,
-              `message.ilike.${like}`,
-            ].join(","),
-          )
+          .or(orParts.join(","))
           .order("donated_at", { ascending: false })
-          .limit(50);
+          .limit(200);
         donations = (data as AnyRow[]) ?? [];
       });
     }
 
     if (wantsBookings) {
       tasks.push(async () => {
+        const { data: matchedEvents } = await supabase
+          .from("events")
+          .select("id, title")
+          .or([`title.ilike.${like}`, `description.ilike.${like}`, `location.ilike.${like}`].join(","))
+          .limit(50);
+        const eventIds = ((matchedEvents as AnyRow[] | null) ?? []).map((e) => e.id);
+
+        const orParts: string[] = [`note.ilike.${like}`];
+        if (customerIds.length > 0) orParts.push(`customer_id.in.(${customerIds.join(",")})`);
+        if (eventIds.length > 0) orParts.push(`event_id.in.(${eventIds.join(",")})`);
+
         const { data } = await supabase
           .from("bookings")
           .select(
             "id, party_size, note, status, booked_at, customer:customers(id, full_name, email), event:events(id, title, type, starts_at)",
           )
-          .ilike("note", like)
+          .or(orParts.join(","))
           .order("booked_at", { ascending: false })
-          .limit(50);
+          .limit(200);
         bookings = (data as AnyRow[]) ?? [];
-
-        const { data: matchedEvents } = await supabase
-          .from("events")
-          .select("id, title")
-          .ilike("title", like)
-          .limit(20);
-        const eventIds = (matchedEvents as AnyRow[] | null)?.map((e) => e.id) ?? [];
-        if (eventIds.length > 0) {
-          const { data: bookingsByEvent } = await supabase
-            .from("bookings")
-            .select(
-              "id, party_size, note, status, booked_at, customer:customers(id, full_name, email), event:events(id, title, type, starts_at)",
-            )
-            .in("event_id", eventIds)
-            .order("booked_at", { ascending: false })
-            .limit(50);
-          const extra = (bookingsByEvent as AnyRow[]) ?? [];
-          const seen = new Set(bookings.map((b) => b.id));
-          for (const e of extra) if (!seen.has(e.id)) bookings.push(e);
-        }
       });
     }
 
     if (wantsPayments) {
       tasks.push(async () => {
+        const orParts: string[] = [
+          `stripe_payment_intent_id.ilike.${like}`,
+          `stripe_invoice_id.ilike.${like}`,
+          `failure_reason.ilike.${like}`,
+        ];
+        if (customerIds.length > 0) orParts.push(`customer_id.in.(${customerIds.join(",")})`);
         const { data } = await supabase
           .from("payments")
           .select(
             "id, amount, kind, status, occurred_at, failure_reason, stripe_payment_intent_id, stripe_invoice_id, customer:customers(id, full_name, email)",
           )
-          .or(
-            [
-              `stripe_payment_intent_id.ilike.${like}`,
-              `stripe_invoice_id.ilike.${like}`,
-              `failure_reason.ilike.${like}`,
-            ].join(","),
-          )
+          .or(orParts.join(","))
           .order("occurred_at", { ascending: false })
-          .limit(50);
+          .limit(200);
         payments = (data as AnyRow[]) ?? [];
       });
     }
@@ -165,7 +205,13 @@ export default async function AdminSearchPage({
   }
 
   const totalHits =
-    customers.length + supports.length + donations.length + bookings.length + payments.length + horses.length;
+    customers.length +
+    supports.length +
+    donations.length +
+    bookings.length +
+    payments.length +
+    horses.length +
+    memos.length;
 
   return (
     <div className="space-y-4">
@@ -175,7 +221,7 @@ export default async function AdminSearchPage({
         <input
           name="q"
           defaultValue={q}
-          placeholder="氏名 / メール / 電話 / 馬名 / メモ / Stripe ID など"
+          placeholder="氏名 / メール / 電話 / 馬名 / 社内メモ / Stripe ID など"
           className="input flex-1 min-w-[260px]"
           autoFocus
         />
@@ -187,13 +233,14 @@ export default async function AdminSearchPage({
           <option value="donations">寄付</option>
           <option value="bookings">予約</option>
           <option value="payments">決済</option>
+          <option value="memos">社内メモ</option>
         </select>
         <button className="btn-primary !py-2 !px-4">検索</button>
       </form>
 
       {q.length === 0 ? (
         <p className="card text-ink-mute text-sm">
-          キーワードを入力して検索してください。顧客・馬・支援・寄付・予約・決済を横断的に探せます。
+          キーワードを入力して検索してください。顧客・馬・支援・寄付・予約・決済・社内メモを横断的に探せます。
         </p>
       ) : (
         <p className="text-sm text-ink-soft">
@@ -203,7 +250,9 @@ export default async function AdminSearchPage({
 
       {customers.length > 0 && (
         <section className="card">
-          <h2 className="section-title">顧客 <span className="text-ink-mute text-sm">({customers.length})</span></h2>
+          <h2 className="section-title">
+            顧客 <span className="text-ink-mute text-sm">({customers.length})</span>
+          </h2>
           <table className="table">
             <thead>
               <tr>
@@ -248,7 +297,9 @@ export default async function AdminSearchPage({
 
       {horses.length > 0 && (
         <section className="card">
-          <h2 className="section-title">馬 <span className="text-ink-mute text-sm">({horses.length})</span></h2>
+          <h2 className="section-title">
+            馬 <span className="text-ink-mute text-sm">({horses.length})</span>
+          </h2>
           <table className="table">
             <thead>
               <tr>
@@ -280,7 +331,9 @@ export default async function AdminSearchPage({
 
       {supports.length > 0 && (
         <section className="card">
-          <h2 className="section-title">支援 <span className="text-ink-mute text-sm">({supports.length})</span></h2>
+          <h2 className="section-title">
+            支援 <span className="text-ink-mute text-sm">({supports.length})</span>
+          </h2>
           <table className="table">
             <thead>
               <tr>
@@ -321,7 +374,9 @@ export default async function AdminSearchPage({
 
       {donations.length > 0 && (
         <section className="card">
-          <h2 className="section-title">寄付 <span className="text-ink-mute text-sm">({donations.length})</span></h2>
+          <h2 className="section-title">
+            寄付 <span className="text-ink-mute text-sm">({donations.length})</span>
+          </h2>
           <table className="table">
             <thead>
               <tr>
@@ -360,7 +415,9 @@ export default async function AdminSearchPage({
 
       {bookings.length > 0 && (
         <section className="card">
-          <h2 className="section-title">予約 <span className="text-ink-mute text-sm">({bookings.length})</span></h2>
+          <h2 className="section-title">
+            予約 <span className="text-ink-mute text-sm">({bookings.length})</span>
+          </h2>
           <table className="table">
             <thead>
               <tr>
@@ -401,7 +458,9 @@ export default async function AdminSearchPage({
 
       {payments.length > 0 && (
         <section className="card">
-          <h2 className="section-title">決済 <span className="text-ink-mute text-sm">({payments.length})</span></h2>
+          <h2 className="section-title">
+            決済 <span className="text-ink-mute text-sm">({payments.length})</span>
+          </h2>
           <table className="table">
             <thead>
               <tr>
@@ -429,6 +488,47 @@ export default async function AdminSearchPage({
                     {p.customer?.id && (
                       <Link
                         href={`/admin/customers/${p.customer.id}`}
+                        className="text-brand underline"
+                      >
+                        顧客
+                      </Link>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {memos.length > 0 && (
+        <section className="card">
+          <h2 className="section-title">
+            社内メモ <span className="text-ink-mute text-sm">({memos.length})</span>
+          </h2>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>更新</th>
+                <th>顧客</th>
+                <th>枠</th>
+                <th>本文</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {memos.map((m) => (
+                <tr key={m.id}>
+                  <td>{formatDate(m.updated_at, true)}</td>
+                  <td className="font-semibold">{m.customer?.full_name ?? "—"}</td>
+                  <td>#{m.slot}</td>
+                  <td className="text-xs whitespace-pre-wrap max-w-[520px]">
+                    {m.body?.length > 200 ? `${m.body.slice(0, 200)}…` : m.body}
+                  </td>
+                  <td className="text-right">
+                    {m.customer?.id && (
+                      <Link
+                        href={`/admin/customers/${m.customer.id}`}
                         className="text-brand underline"
                       >
                         顧客

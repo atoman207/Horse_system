@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { getSession } from "@/lib/auth";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import HeaderUserMenu from "./HeaderUserMenu";
 
 export default async function SiteHeader() {
@@ -9,12 +9,12 @@ export default async function SiteHeader() {
 
   let name = "";
   let avatarUrl: string | null = null;
-  if (session?.customerId) {
-    const supabase = createSupabaseServerClient();
-    const { data } = await supabase
+  if (session) {
+    const admin = createSupabaseAdminClient();
+    const { data } = await admin
       .from("customers")
       .select("full_name, avatar_url")
-      .eq("id", session.customerId)
+      .eq("auth_user_id", session.userId)
       .maybeSingle();
     name = (data?.full_name as string) ?? "";
     avatarUrl = (data?.avatar_url as string | null) ?? null;

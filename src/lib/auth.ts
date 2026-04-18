@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "./supabase/server";
+import { createSupabaseAdminClient } from "./supabase/admin";
 
 export type SessionInfo = {
   userId: string;
@@ -19,11 +20,31 @@ export async function getSession(): Promise<SessionInfo | null> {
     .eq("id", userData.user.id)
     .maybeSingle();
 
+  let customerId = (profile?.customer_id as string | null) ?? null;
+  const role = (profile?.role as SessionInfo["role"]) ?? "member";
+
+  if (!customerId) {
+    const admin = createSupabaseAdminClient();
+    const { data: cust } = await admin
+      .from("customers")
+      .select("id")
+      .eq("auth_user_id", userData.user.id)
+      .maybeSingle();
+    if (cust?.id) {
+      customerId = cust.id as string;
+      await admin.from("profiles").upsert({
+        id: userData.user.id,
+        role,
+        customer_id: customerId,
+      });
+    }
+  }
+
   return {
     userId: userData.user.id,
     email: userData.user.email ?? null,
-    role: (profile?.role as SessionInfo["role"]) ?? "member",
-    customerId: (profile?.customer_id as string | null) ?? null,
+    role,
+    customerId,
   };
 }
 
