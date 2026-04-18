@@ -1,0 +1,34 @@
+import Link from "next/link";
+import SignupForm from "./SignupForm";
+import PublicHeader from "@/components/PublicHeader";
+
+export default function SignupPage() {
+  return (
+    <div className="min-h-screen flex flex-col">
+      <PublicHeader active="signup" />
+      <main className="flex-1 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-bold text-brand">
+              Retouchメンバーズサイト
+            </h1>
+            <p className="text-ink-soft mt-1">新規会員登録</p>
+            <p className="text-xs text-ink-mute mt-2">
+              ログイン不要で、どなたでも登録いただけます。
+            </p>
+          </div>
+          <div className="card">
+            <SignupForm />
+          </div>
+          <div className="mt-4 text-center text-sm">
+            すでにアカウントをお持ちの方は
+            <Link href="/login" className="text-brand underline mx-1">
+              ログイン
+            </Link>
+            へ。
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}

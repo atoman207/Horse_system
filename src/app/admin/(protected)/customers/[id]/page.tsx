@@ -1,0 +1,182 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { formatDate, formatUnits, formatYen, statusLabel } from "@/lib/format";
+import MemoEditor from "./MemoEditor";
+import StatusEditor from "./StatusEditor";
+
+export default async function CustomerDetail({ params }: { params: { id: string } }) {
+  const supabase = createSupabaseServerClient();
+
+  const [
+    { data: customer },
+    { data: summary },
+    { data: contracts },
+    { data: supports },
+    { data: donations },
+    { data: bookings },
+    { data: payments },
+    { data: memos },
+  ] = await Promise.all([
+    supabase.from("customers").select("*").eq("id", params.id).maybeSingle(),
+    supabase.from("v_customer_summary").select("*").eq("customer_id", params.id).maybeSingle(),
+    supabase.from("contracts").select("*, plan:membership_plans(*)").eq("customer_id", params.id).order("started_at", { ascending: false }),
+    supabase.from("support_subscriptions").select("*, horse:horses(*)").eq("customer_id", params.id).order("started_at", { ascending: false }),
+    supabase.from("donations").select("*").eq("customer_id", params.id).order("donated_at", { ascending: false }),
+    supabase.from("bookings").select("*, event:events(*)").eq("customer_id", params.id).order("booked_at", { ascending: false }),
+    supabase.from("payments").select("*").eq("customer_id", params.id).order("occurred_at", { ascending: false }).limit(50),
+    supabase.from("admin_memos").select("*").eq("customer_id", params.id).order("slot"),
+  ]);
+
+  if (!customer) return notFound();
+  const c: any = customer;
+  const s: any = summary;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <Link href="/admin/customers" className="text-brand underline text-sm">← 顧客一覧</Link>
+          <h1 className="text-2xl font-bold mt-1">{c.full_name} 様</h1>
+          <p className="text-sm text-ink-soft">{c.email ?? "—"}  /  {c.phone ?? "—"}</p>
+        </div>
+        <StatusEditor customerId={c.id} initialStatus={c.status} />
+      </div>
+
+      <div className="grid md:grid-cols-4 gap-3">
+        <div className="card">
+          <p className="text-xs text-ink-soft">会員種別</p>
+          <p className="text-lg font-bold">{s?.primary_plan_name ?? "—"}</p>
+        </div>
+        <div className="card">
+          <p className="text-xs text-ink-soft">支援状況</p>
+          <p className="text-lg font-bold">{s?.total_support_horses ?? 0}頭 / {formatUnits(s?.total_support_units ?? 0)}</p>
+        </div>
+        <div className="card">
+          <p className="text-xs text-ink-soft">月額合計</p>
+          <p className="text-lg font-bold">{formatYen(s?.monthly_total ?? 0)}</p>
+        </div>
+        <div className="card">
+          <p className="text-xs text-ink-soft">次回決済</p>
+          <p className="text-lg font-bold">{formatDate(s?.next_payment_at)}</p>
+        </div>
+      </div>
+
+      <section className="card">
+        <h2 className="section-title">基本情報</h2>
+        <dl className="grid md:grid-cols-2 gap-x-6 gap-y-1 text-sm">
+          <div className="flex justify-between py-1.5 border-b border-surface-line"><dt className="text-ink-soft">氏名</dt><dd>{c.full_name}</dd></div>
+          <div className="flex justify-between py-1.5 border-b border-surface-line"><dt className="text-ink-soft">カナ</dt><dd>{c.full_name_kana ?? "—"}</dd></div>
+          <div className="flex justify-between py-1.5 border-b border-surface-line"><dt className="text-ink-soft">メール</dt><dd>{c.email}</dd></div>
+          <div className="flex justify-between py-1.5 border-b border-surface-line"><dt className="text-ink-soft">電話</dt><dd>{c.phone ?? "—"}</dd></div>
+          <div className="flex justify-between py-1.5 border-b border-surface-line"><dt className="text-ink-soft">生年月日</dt><dd>{c.birthday ?? "—"}</dd></div>
+          <div className="flex justify-between py-1.5 border-b border-surface-line"><dt className="text-ink-soft">性別</dt><dd>{c.gender ?? "—"}</dd></div>
+          <div className="flex justify-between py-1.5 border-b border-surface-line md:col-span-2"><dt className="text-ink-soft">住所</dt>
+            <dd className="text-right">{c.postal_code ? `〒${c.postal_code} ` : ""}{c.address1} {c.address2}</dd>
+          </div>
+          <div className="flex justify-between py-1.5 border-b border-surface-line"><dt className="text-ink-soft">Stripe Customer</dt><dd className="font-mono text-xs">{c.stripe_customer_id ?? "—"}</dd></div>
+          <div className="flex justify-between py-1.5 border-b border-surface-line"><dt className="text-ink-soft">加入日</dt><dd>{formatDate(c.joined_at)}</dd></div>
+        </dl>
+      </section>
+
+      <section className="card">
+        <h2 className="section-title">支援履歴</h2>
+        <table className="table">
+          <thead><tr><th>馬</th><th>口数</th><th>月額</th><th>状態</th><th>開始</th><th>停止</th></tr></thead>
+          <tbody>
+            {(supports ?? []).map((x: any) => (
+              <tr key={x.id}>
+                <td>{x.horse?.name ?? "—"}</td>
+                <td>{formatUnits(x.units)}</td>
+                <td>{formatYen(x.monthly_amount)}</td>
+                <td>{statusLabel(x.status)}</td>
+                <td>{formatDate(x.started_at)}</td>
+                <td>{x.canceled_at ? formatDate(x.canceled_at) : "—"}</td>
+              </tr>
+            ))}
+            {(supports ?? []).length === 0 && <tr><td colSpan={6} className="text-center text-ink-mute py-3">支援履歴はまだありません。</td></tr>}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="card">
+        <h2 className="section-title">契約</h2>
+        <table className="table">
+          <thead><tr><th>プラン</th><th>状態</th><th>開始</th><th>次回決済</th><th>停止</th></tr></thead>
+          <tbody>
+            {(contracts ?? []).map((x: any) => (
+              <tr key={x.id}>
+                <td>{x.plan?.name ?? "—"}</td>
+                <td>{statusLabel(x.status)}</td>
+                <td>{formatDate(x.started_at)}</td>
+                <td>{formatDate(x.current_period_end)}</td>
+                <td>{x.canceled_at ? formatDate(x.canceled_at) : "—"}</td>
+              </tr>
+            ))}
+            {(contracts ?? []).length === 0 && <tr><td colSpan={5} className="text-center text-ink-mute py-3">契約はまだありません。</td></tr>}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="card">
+        <h2 className="section-title">寄付履歴</h2>
+        <table className="table">
+          <thead><tr><th>日時</th><th>金額</th><th>状態</th><th>メッセージ</th></tr></thead>
+          <tbody>
+            {(donations ?? []).map((d: any) => (
+              <tr key={d.id}>
+                <td>{formatDate(d.donated_at, true)}</td>
+                <td>{formatYen(d.amount)}</td>
+                <td>{statusLabel(d.status)}</td>
+                <td className="text-xs">{d.message ?? "—"}</td>
+              </tr>
+            ))}
+            {(donations ?? []).length === 0 && <tr><td colSpan={4} className="text-center text-ink-mute py-3">寄付履歴はまだありません。</td></tr>}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="card">
+        <h2 className="section-title">見学会・個別見学 履歴</h2>
+        <table className="table">
+          <thead><tr><th>種別</th><th>タイトル</th><th>日時</th><th>状態</th></tr></thead>
+          <tbody>
+            {(bookings ?? []).map((b: any) => (
+              <tr key={b.id}>
+                <td>{b.event?.type === "private_visit" ? "個別見学" : "見学会"}</td>
+                <td>{b.event?.title}</td>
+                <td>{formatDate(b.event?.starts_at, true)}</td>
+                <td>{statusLabel(b.status)}</td>
+              </tr>
+            ))}
+            {(bookings ?? []).length === 0 && <tr><td colSpan={4} className="text-center text-ink-mute py-3">見学履歴はまだありません。</td></tr>}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="card">
+        <h2 className="section-title">決済履歴</h2>
+        <table className="table">
+          <thead><tr><th>日時</th><th>種別</th><th>金額</th><th>状態</th><th>失敗理由</th></tr></thead>
+          <tbody>
+            {(payments ?? []).map((p: any) => (
+              <tr key={p.id}>
+                <td>{formatDate(p.occurred_at, true)}</td>
+                <td>{p.kind}</td>
+                <td>{formatYen(p.amount)}</td>
+                <td>{statusLabel(p.status)}</td>
+                <td className="text-xs">{p.failure_reason ?? "—"}</td>
+              </tr>
+            ))}
+            {(payments ?? []).length === 0 && <tr><td colSpan={5} className="text-center text-ink-mute py-3">決済履歴はまだありません。</td></tr>}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="card">
+        <h2 className="section-title">内部メモ（顧客には非表示）</h2>
+        <MemoEditor customerId={c.id} initial={(memos as any[]) ?? []} />
+      </section>
+    </div>
+  );
+}
