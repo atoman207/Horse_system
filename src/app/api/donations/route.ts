@@ -9,7 +9,8 @@ const schema = z.object({
   amount: z.number().int().min(100).max(10_000_000),
   message: z.string().max(1000).optional().nullable(),
   donor_name: z.string().max(120).optional().nullable(),
-  donor_email: z.string().email().optional().nullable(),
+  // Spec: 匿名寄付であっても、履歴統合のためメールは必須取得。
+  donor_email: z.string().email("メールアドレスの形式が正しくありません"),
 });
 
 /**

@@ -1,8 +1,14 @@
 import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { formatDate, statusLabel } from "@/lib/format";
+import BookingRow from "./BookingRow";
+import AddBookingForm from "./AddBookingForm";
 
-export default async function BookingsPage({ searchParams }: { searchParams: { event?: string } }) {
+export default async function BookingsPage({
+  searchParams,
+}: {
+  searchParams: { event?: string };
+}) {
   const supabase = createSupabaseServerClient();
   const { data: events } = await supabase
     .from("events")
@@ -20,7 +26,9 @@ export default async function BookingsPage({ searchParams }: { searchParams: { e
         .order("booked_at")
     : ({ data: [] } as any);
 
-  const reservedCount = (bookings ?? []).filter((b: any) => b.status !== "canceled").reduce((a: number, b: any) => a + Number(b.party_size ?? 1), 0);
+  const reservedCount = (bookings ?? [])
+    .filter((b: any) => b.status !== "canceled")
+    .reduce((a: number, b: any) => a + Number(b.party_size ?? 1), 0);
 
   return (
     <div className="space-y-4">
@@ -40,35 +48,78 @@ export default async function BookingsPage({ searchParams }: { searchParams: { e
       {selectedEvent && (
         <div className="card">
           <div className="flex flex-wrap gap-3 text-sm">
-            <p><span className="text-ink-soft">定員</span> <span className="font-bold">{(selectedEvent as any).capacity}</span></p>
-            <p><span className="text-ink-soft">予約数</span> <span className="font-bold">{reservedCount}</span></p>
-            <p><span className="text-ink-soft">残席</span> <span className="font-bold">{Math.max(0, (selectedEvent as any).capacity - reservedCount)}</span></p>
+            <p>
+              <span className="text-ink-soft">定員</span>{" "}
+              <span className="font-bold">{(selectedEvent as any).capacity}</span>
+            </p>
+            <p>
+              <span className="text-ink-soft">予約数</span> <span className="font-bold">{reservedCount}</span>
+            </p>
+            <p>
+              <span className="text-ink-soft">残席</span>{" "}
+              <span className="font-bold">{Math.max(0, (selectedEvent as any).capacity - reservedCount)}</span>
+            </p>
           </div>
         </div>
       )}
 
+      {selectedId && (
+        <details className="card">
+          <summary className="cursor-pointer font-semibold">＋ 予約を追加</summary>
+          <div className="mt-3">
+            <AddBookingForm eventId={selectedId} />
+          </div>
+        </details>
+      )}
+
       <div className="card p-0 overflow-auto">
         <table className="table">
-          <thead><tr><th>氏名</th><th>メール</th><th>人数</th><th>予約日時</th><th>状態</th><th></th></tr></thead>
+          <thead>
+            <tr>
+              <th className="w-12 text-right">No.</th>
+              <th>氏名</th>
+              <th>メール</th>
+              <th>人数</th>
+              <th>予約日時</th>
+              <th>状態</th>
+              <th></th>
+            </tr>
+          </thead>
           <tbody>
-            {(bookings ?? []).map((b: any) => (
-              <tr key={b.id}>
-                <td>
-                  <Link href={`/admin/customers/${b.customer?.id}`} className="text-brand underline">{b.customer?.full_name}</Link>
-                </td>
-                <td>{b.customer?.email ?? "—"}</td>
-                <td>{b.party_size}</td>
-                <td>{formatDate(b.booked_at, true)}</td>
-                <td>{statusLabel(b.status)}</td>
-                <td></td>
-              </tr>
+            {(bookings ?? []).map((b: any, i: number) => (
+              <BookingRow
+                key={b.id}
+                index={i + 1}
+                booking={{
+                  id: b.id,
+                  customer_id: b.customer?.id ?? b.customer_id,
+                  customer_name: b.customer?.full_name ?? "—",
+                  customer_email: b.customer?.email ?? "",
+                  party_size: Number(b.party_size ?? 1),
+                  note: b.note ?? "",
+                  status: b.status,
+                  status_label: statusLabel(b.status),
+                  booked_at: formatDate(b.booked_at, true),
+                }}
+              />
             ))}
             {(bookings ?? []).length === 0 && (
-              <tr><td colSpan={6} className="text-center text-ink-mute py-6">予約はありません。</td></tr>
+              <tr>
+                <td colSpan={7} className="text-center text-ink-mute py-6">
+                  予約はありません。
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
       </div>
+
+      <p className="text-xs text-ink-mute">
+        <Link href="/admin/events" className="underline">
+          イベントマスタで新しいイベントを作成
+        </Link>
+        することもできます。
+      </p>
     </div>
   );
 }

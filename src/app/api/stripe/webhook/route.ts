@@ -100,31 +100,77 @@ export async function POST(req: Request) {
           .eq("stripe_customer_id", stripeCustomerId)
           .maybeSingle();
         if (customer) {
+          const mappedStatus =
+            sub.status === "active" ? "active" :
+            sub.status === "past_due" ? "past_due" :
+            sub.status === "canceled" ? "canceled" :
+            sub.status === "paused" ? "paused" : "incomplete";
+          const currentPeriodEndIso = sub.current_period_end
+            ? new Date(sub.current_period_end * 1000).toISOString()
+            : null;
           await admin.from("contracts").upsert(
             {
               customer_id: (customer as any).id,
               stripe_subscription_id: sub.id,
-              status:
-                sub.status === "active" ? "active" :
-                sub.status === "past_due" ? "past_due" :
-                sub.status === "canceled" ? "canceled" :
-                sub.status === "paused" ? "paused" : "incomplete",
-              current_period_end: sub.current_period_end
-                ? new Date(sub.current_period_end * 1000).toISOString()
-                : null,
+              status: mappedStatus,
+              current_period_end: currentPeriodEndIso,
             },
             { onConflict: "stripe_subscription_id" },
           );
+
+          // 紐づく contract の支援行にも同じステータスを反映。
+          //  - active   : 会員画面で「正常」表示
+          //  - past_due : 「決済失敗」表示
+          //  - incomplete: 「手続き中」表示
+          // 停止予定（cancel_at_period_end=true）は
+          //   status=active + canceled_at=current_period_end として保持。
+          const { data: contract } = await admin
+            .from("contracts")
+            .select("id")
+            .eq("stripe_subscription_id", sub.id)
+            .maybeSingle();
+          if (contract) {
+            const supportStatus =
+              mappedStatus === "canceled" ? "canceled" :
+              mappedStatus === "past_due" ? "past_due" :
+              mappedStatus === "incomplete" ? "incomplete" : "active";
+            await admin
+              .from("support_subscriptions")
+              .update({
+                status: supportStatus,
+                canceled_at: sub.cancel_at_period_end ? currentPeriodEndIso : null,
+              })
+              .eq("contract_id", (contract as any).id)
+              .in("status", ["active", "past_due", "incomplete"]);
+          }
         }
         break;
       }
 
       case "customer.subscription.deleted": {
         const sub = event.data.object as Stripe.Subscription;
+        const nowIso = new Date().toISOString();
         await admin
           .from("contracts")
-          .update({ status: "canceled", canceled_at: new Date().toISOString() })
+          .update({ status: "canceled", canceled_at: nowIso })
           .eq("stripe_subscription_id", sub.id);
+
+        const { data: contract } = await admin
+          .from("contracts")
+          .select("id")
+          .eq("stripe_subscription_id", sub.id)
+          .maybeSingle();
+        if (contract) {
+          await admin
+            .from("support_subscriptions")
+            .update({
+              status: "canceled",
+              canceled_at: nowIso,
+              stripe_subscription_item_id: null,
+            })
+            .eq("contract_id", (contract as any).id)
+            .in("status", ["active", "past_due", "incomplete"]);
+        }
         break;
       }
 
@@ -140,7 +186,7 @@ export async function POST(req: Request) {
         const { data: contract } = invoice.subscription
           ? await admin
               .from("contracts")
-              .select("id")
+              .select("id, status")
               .eq("stripe_subscription_id", invoice.subscription as string)
               .maybeSingle()
           : { data: null } as any;
@@ -159,8 +205,15 @@ export async function POST(req: Request) {
           raw: invoice as any,
         });
 
+        // --- 決済失敗 → past_due 化 + メール通知 ---
         if (event.type === "invoice.payment_failed" && contract) {
           await admin.from("contracts").update({ status: "past_due" }).eq("id", (contract as any).id);
+          await admin
+            .from("support_subscriptions")
+            .update({ status: "past_due" })
+            .eq("contract_id", (contract as any).id)
+            .in("status", ["active", "incomplete"]);
+
           const { data: fullCust } = await admin
             .from("customers")
             .select("full_name, email")
@@ -181,6 +234,25 @@ export async function POST(req: Request) {
               invoice_id: invoice.id,
             },
           });
+        }
+
+        // --- 決済成功 → past_due から復帰 + next_period_end 更新 ---
+        if (event.type === "invoice.payment_succeeded" && contract) {
+          const nextPeriodEnd = invoice.lines?.data?.[0]?.period?.end;
+          await admin
+            .from("contracts")
+            .update({
+              status: "active",
+              current_period_end: nextPeriodEnd
+                ? new Date(nextPeriodEnd * 1000).toISOString()
+                : undefined,
+            })
+            .eq("id", (contract as any).id);
+          await admin
+            .from("support_subscriptions")
+            .update({ status: "active" })
+            .eq("contract_id", (contract as any).id)
+            .in("status", ["past_due", "incomplete"]);
         }
         break;
       }

@@ -72,6 +72,7 @@ export default async function CustomersListPage({
         <table className="table">
           <thead>
             <tr>
+              <th className="w-12 text-right">No.</th>
               <th>氏名</th>
               <th>メール</th>
               <th>会員種別</th>
@@ -83,8 +84,9 @@ export default async function CustomersListPage({
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {rows.map((r, i) => (
               <tr key={r.customer_id} className="hover:bg-surface-soft">
+                <td className="text-right text-ink-mute tabular-nums">{i + 1}</td>
                 <td className="font-semibold">{r.full_name}</td>
                 <td>{r.email ?? "—"}</td>
                 <td>{r.primary_plan_name ?? "—"}</td>
@@ -106,7 +108,7 @@ export default async function CustomersListPage({
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={8} className="text-center text-ink-mute py-6">該当する顧客がいません。</td></tr>
+              <tr><td colSpan={9} className="text-center text-ink-mute py-6">該当する顧客がいません。</td></tr>
             )}
           </tbody>
         </table>

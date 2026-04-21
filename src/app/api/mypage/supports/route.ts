@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { syncSupportCreate } from "@/lib/stripeSupport";
+import { notify, supportAddedTemplate } from "@/lib/notify";
 
 const schema = z.object({
   horse_id: z.string().uuid(),
@@ -107,18 +108,23 @@ export async function POST(req: Request) {
     .in("status", ["active", "past_due"])
     .maybeSingle();
 
+  const stripeEnabled = Boolean(process.env.STRIPE_SECRET_KEY);
+
   if (existingRow) {
     const newUnits = Number((existingRow as any).units) + Number(units);
     const newMonthly = Math.round(perUnit * newUnits);
+
+    // --- 先に DB を仮保存 (incomplete = 手続き中) ---
     const { error: uErr } = await admin
       .from("support_subscriptions")
-      .update({ units: newUnits, monthly_amount: newMonthly, status: "active" })
+      .update({ units: newUnits, monthly_amount: newMonthly, status: "incomplete" })
       .eq("id", (existingRow as any).id);
     if (uErr) {
       return NextResponse.json({ error: uErr.message }, { status: 500 });
     }
 
     let sync;
+    let syncError: string | null = null;
     try {
       sync = await syncSupportCreate({
         customer: customer as any,
@@ -133,11 +139,20 @@ export async function POST(req: Request) {
       });
     } catch (e: any) {
       sync = { synced: false, reason: e?.message ?? "stripe_error" };
+      syncError = e?.message ?? "Stripeとの同期に失敗しました";
     }
+
+    const requiresStripePayment = Boolean(stripeEnabled && sync?.requires_payment);
+    // Stripe決済アクションが必要な間は incomplete のまま保持し、支払いページへ誘導する。
+    const canActivate = (sync?.synced && !requiresStripePayment) || !stripeEnabled;
+    await admin
+      .from("support_subscriptions")
+      .update({ status: canActivate ? "active" : "incomplete" })
+      .eq("id", (existingRow as any).id);
 
     await admin.from("audit_logs").insert({
       actor_id: session.userId,
-      action: "support.merge",
+      action: canActivate ? "support.merge" : requiresStripePayment ? "support.merge.requires_payment" : "support.merge.sync_failed",
       target_table: "support_subscriptions",
       target_id: (existingRow as any).id,
       meta: {
@@ -149,6 +164,44 @@ export async function POST(req: Request) {
         monthly: newMonthly,
         stripe: sync,
       },
+    });
+
+    if (requiresStripePayment) {
+      return NextResponse.json({
+        ok: true,
+        contract_id: contractId,
+        support_id: (existingRow as any).id,
+        consolidated: true,
+        checkout_url: sync?.checkout_url ?? null,
+        requires_payment: true,
+        stripe: sync,
+      });
+    }
+
+    if (!canActivate) {
+      return NextResponse.json(
+        {
+          error:
+            syncError ??
+            "決済の同期に失敗したため、支援の追加を確定できませんでした。時間をおいて再度お試しください。",
+        },
+        { status: 502 },
+      );
+    }
+
+    const tplMerge = supportAddedTemplate({
+      name: (customer as any).full_name,
+      horseName: horse.name,
+      units: newUnits,
+      monthly: newMonthly,
+    });
+    await notify({
+      kind: "support_added",
+      to: (customer as any).email,
+      to_name: (customer as any).full_name,
+      subject: tplMerge.subject,
+      body_text: tplMerge.body_text,
+      meta: { support_id: (existingRow as any).id, horse_name: horse.name, units: newUnits },
     });
 
     return NextResponse.json({
@@ -169,13 +222,14 @@ export async function POST(req: Request) {
       horse_id: horse.id,
       units,
       monthly_amount: monthly,
-      status: "active",
+      status: "incomplete",
     })
     .select("id")
     .single();
   if (sErr || !inserted) return NextResponse.json({ error: sErr?.message ?? "failed" }, { status: 500 });
 
   let sync;
+  let syncError: string | null = null;
   try {
     sync = await syncSupportCreate({
       customer: customer as any,
@@ -190,14 +244,59 @@ export async function POST(req: Request) {
     });
   } catch (e: any) {
     sync = { synced: false, reason: e?.message ?? "stripe_error" };
+    syncError = e?.message ?? "Stripeとの同期に失敗しました";
   }
+
+  const requiresStripePayment = Boolean(stripeEnabled && sync?.requires_payment);
+  const canActivate = (sync?.synced && !requiresStripePayment) || !stripeEnabled;
+  await admin
+    .from("support_subscriptions")
+    .update({ status: canActivate ? "active" : "incomplete" })
+    .eq("id", inserted.id);
 
   await admin.from("audit_logs").insert({
     actor_id: session.userId,
-    action: "support.create",
+    action: canActivate ? "support.create" : requiresStripePayment ? "support.create.requires_payment" : "support.create.sync_failed",
     target_table: "support_subscriptions",
     target_id: inserted.id,
     meta: { horse_id, horse_name: horse.name, plan_id, units, monthly, stripe: sync },
+  });
+
+  if (requiresStripePayment) {
+    return NextResponse.json({
+      ok: true,
+      contract_id: contractId,
+      support_id: inserted.id,
+      checkout_url: sync?.checkout_url ?? null,
+      requires_payment: true,
+      stripe: sync,
+    });
+  }
+
+  if (!canActivate) {
+    return NextResponse.json(
+      {
+        error:
+          syncError ??
+          "決済の同期に失敗したため、支援の登録を確定できませんでした。時間をおいて再度お試しください。",
+      },
+      { status: 502 },
+    );
+  }
+
+  const tpl = supportAddedTemplate({
+    name: (customer as any).full_name,
+    horseName: horse.name,
+    units: Number(units),
+    monthly,
+  });
+  await notify({
+    kind: "support_added",
+    to: (customer as any).email,
+    to_name: (customer as any).full_name,
+    subject: tpl.subject,
+    body_text: tpl.body_text,
+    meta: { support_id: inserted.id, horse_name: horse.name, units },
   });
 
   return NextResponse.json({

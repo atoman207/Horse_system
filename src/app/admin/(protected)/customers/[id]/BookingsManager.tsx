@@ -149,6 +149,7 @@ export default function BookingsManager({
       <table className="table">
         <thead>
           <tr>
+            <th className="w-12 text-right">No.</th>
             <th>種別</th>
             <th>タイトル</th>
             <th>日時</th>
@@ -158,8 +159,9 @@ export default function BookingsManager({
           </tr>
         </thead>
         <tbody>
-          {bookings.map((b) => (
+          {bookings.map((b, i) => (
             <tr key={b.id}>
+              <td className="text-right text-ink-mute tabular-nums">{i + 1}</td>
               <td>{b.event?.type === "private_visit" ? "個別見学" : "見学会"}</td>
               <td>{b.event?.title ?? "—"}</td>
               <td>{formatDateTime(b.event?.starts_at)}</td>
@@ -193,7 +195,7 @@ export default function BookingsManager({
           ))}
           {bookings.length === 0 && (
             <tr>
-              <td colSpan={6} className="text-center text-ink-mute py-3">
+              <td colSpan={7} className="text-center text-ink-mute py-3">
                 予約履歴はまだありません。
               </td>
             </tr>

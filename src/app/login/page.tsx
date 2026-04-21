@@ -1,6 +1,5 @@
 import Link from "next/link";
 import LoginForm from "./LoginForm";
-import PublicHeader from "@/components/PublicHeader";
 
 export default function LoginPage({
   searchParams,
@@ -9,7 +8,6 @@ export default function LoginPage({
 }) {
   return (
     <div className="min-h-screen flex flex-col">
-      <PublicHeader active="login" />
       <main className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-6">

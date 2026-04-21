@@ -70,7 +70,7 @@ export default function DonationForm() {
       </div>
       {error && <p className="text-danger text-sm">{error}</p>}
       <button className="btn-primary w-full" onClick={submit} disabled={saving}>
-        {saving ? "処理中..." : `${formatYen(amount)} を寄付する`}
+        {saving ? "処理中..." : "この内容で寄付する"}
       </button>
       <p className="text-xs text-ink-mute">
         Stripe の決済ページへ移動します。決済完了後、自動でお礼メールをお送りいたします。

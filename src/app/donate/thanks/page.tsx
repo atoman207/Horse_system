@@ -1,17 +1,15 @@
 import Link from "next/link";
-import PublicHeader from "@/components/PublicHeader";
 
 export default function PublicDonateThanksPage() {
   return (
     <div className="min-h-screen flex flex-col">
-      <PublicHeader active="donate" />
       <main className="flex-1 flex items-center justify-center p-4">
         <div className="card max-w-md w-full text-center space-y-3">
           <p className="text-3xl">💚</p>
           <h1 className="text-xl font-bold">ご寄付をお預かりしました</h1>
           <p className="text-ink-soft">
-            温かいご支援を誠にありがとうございます。<br />
-            決済完了後、ご記載いただいたメールアドレスにお礼メールをお送りいたします。
+            ご寄付ありがとうございました。受付が完了しました。<br />
+            確認メールをお送りしておりますので、ご確認ください。
           </p>
           <div className="flex flex-col gap-2 pt-2">
             <Link href="/signup" className="btn-primary">

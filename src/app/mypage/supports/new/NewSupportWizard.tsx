@@ -43,6 +43,10 @@ export default function NewSupportWizard({ horses, plans, existingHorseIds, disa
       setError(j.error ?? "登録できませんでした。");
       return;
     }
+    if (j.checkout_url) {
+      window.location.href = j.checkout_url;
+      return;
+    }
     router.replace("/mypage/supports/completed");
     router.refresh();
   };
@@ -135,7 +139,7 @@ export default function NewSupportWizard({ horses, plans, existingHorseIds, disa
           </div>
           <div className="flex justify-between mt-4">
             <button className="btn-ghost" onClick={() => setStep(1)}>戻る</button>
-            <button className="btn-primary" disabled={!planId || units <= 0} onClick={() => setStep(3)}>次へ進む</button>
+            <button className="btn-primary" disabled={!planId || units <= 0} onClick={() => setStep(3)}>内容を確認する</button>
           </div>
         </div>
       )}
@@ -153,7 +157,7 @@ export default function NewSupportWizard({ horses, plans, existingHorseIds, disa
           <div className="flex justify-between">
             <button className="btn-ghost" onClick={() => setStep(2)}>戻る</button>
             <button className="btn-primary" onClick={submit} disabled={submitting}>
-              {submitting ? "処理中..." : "申し込む"}
+              {submitting ? "処理中..." : "この内容で申し込む"}
             </button>
           </div>
         </div>

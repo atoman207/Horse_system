@@ -83,10 +83,11 @@ export default async function HistoryPage() {
           <p className="text-ink-mute">まだ決済履歴はありません。</p>
         ) : (
           <table className="table">
-            <thead><tr><th>日時</th><th>種別</th><th>金額</th><th>状態</th></tr></thead>
+            <thead><tr><th className="w-12 text-right">No.</th><th>日時</th><th>種別</th><th>金額</th><th>状態</th></tr></thead>
             <tbody>
-              {payments.map((p) => (
+              {payments.map((p, i) => (
                 <tr key={p.id}>
+                  <td className="text-right text-ink-mute tabular-nums">{i + 1}</td>
                   <td>{formatDate(p.occurred_at, true)}</td>
                   <td>{p.kind === "donation" ? "単発寄付" : p.kind === "subscription" ? "継続決済" : "一回払い"}</td>
                   <td>{formatYen(p.amount)}</td>

@@ -1,11 +1,9 @@
 import Link from "next/link";
-import PublicHeader from "@/components/PublicHeader";
 import PublicDonationForm from "./PublicDonationForm";
 
 export default function PublicDonatePage() {
   return (
     <div className="min-h-screen flex flex-col">
-      <PublicHeader active="donate" />
       <main className="flex-1 w-full max-w-xl mx-auto p-4 space-y-4">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-brand">単発寄付</h1>

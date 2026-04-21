@@ -100,6 +100,7 @@ export default async function AdminUsersPage({
         <table className="table">
           <thead>
             <tr>
+              <th className="w-12 text-right">No.</th>
               <th></th>
               <th>氏名</th>
               <th>メール</th>
@@ -110,8 +111,9 @@ export default async function AdminUsersPage({
             </tr>
           </thead>
           <tbody>
-            {filtered.map((r) => (
+            {filtered.map((r, i) => (
               <tr key={r.id} className="hover:bg-surface-soft">
+                <td className="text-right text-ink-mute tabular-nums">{i + 1}</td>
                 <td>
                   {r.avatar_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -150,7 +152,7 @@ export default async function AdminUsersPage({
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="text-center text-ink-mute py-6">
+                <td colSpan={8} className="text-center text-ink-mute py-6">
                   該当するユーザーがいません。
                 </td>
               </tr>

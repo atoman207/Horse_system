@@ -175,6 +175,7 @@ export default function SupportsManager({
       <table className="table">
         <thead>
           <tr>
+            <th className="w-12 text-right">No.</th>
             <th>馬</th>
             <th>口数</th>
             <th>単価</th>
@@ -186,10 +187,11 @@ export default function SupportsManager({
           </tr>
         </thead>
         <tbody>
-          {supports.map((s) => {
+          {supports.map((s, i) => {
             const editing = editingId === s.id;
             return (
               <tr key={s.id}>
+                <td className="text-right text-ink-mute tabular-nums">{i + 1}</td>
                 <td>{s.horse?.name ?? "—"}</td>
                 <td>
                   {editing ? (
@@ -264,7 +266,7 @@ export default function SupportsManager({
           })}
           {supports.length === 0 && (
             <tr>
-              <td colSpan={8} className="text-center text-ink-mute py-3">
+              <td colSpan={9} className="text-center text-ink-mute py-3">
                 支援履歴はまだありません。
               </td>
             </tr>

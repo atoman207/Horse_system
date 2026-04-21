@@ -12,10 +12,11 @@ export default async function EventsPage() {
       <EventForm />
       <div className="card p-0 overflow-auto">
         <table className="table">
-          <thead><tr><th>タイトル</th><th>種別</th><th>日時</th><th>定員</th><th>限定</th><th>公開</th><th></th></tr></thead>
+          <thead><tr><th className="w-12 text-right">No.</th><th>タイトル</th><th>種別</th><th>日時</th><th>定員</th><th>限定</th><th>公開</th><th></th></tr></thead>
           <tbody>
-            {(events ?? []).map((e: any) => (
+            {(events ?? []).map((e: any, i: number) => (
               <tr key={e.id}>
+                <td className="text-right text-ink-mute tabular-nums">{i + 1}</td>
                 <td className="font-semibold">{e.title}</td>
                 <td>{e.type === "private_visit" ? "個別見学" : "見学会"}</td>
                 <td>{formatDate(e.starts_at, true)}</td>
@@ -28,7 +29,7 @@ export default async function EventsPage() {
               </tr>
             ))}
             {(events ?? []).length === 0 && (
-              <tr><td colSpan={7} className="text-center py-6 text-ink-mute">イベントはまだありません。</td></tr>
+              <tr><td colSpan={8} className="text-center py-6 text-ink-mute">イベントはまだありません。</td></tr>
             )}
           </tbody>
         </table>

@@ -1,11 +1,9 @@
 import Link from "next/link";
 import SignupForm from "./SignupForm";
-import PublicHeader from "@/components/PublicHeader";
 
 export default function SignupPage() {
   return (
     <div className="min-h-screen flex flex-col">
-      <PublicHeader active="signup" />
       <main className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-6">

@@ -22,10 +22,11 @@ export default async function EditEventPage({ params }: { params: { id: string }
       <section className="card">
         <h2 className="section-title">参加者一覧（{(bookings ?? []).length}件）</h2>
         <table className="table">
-          <thead><tr><th>氏名</th><th>メール</th><th>人数</th><th>状態</th></tr></thead>
+          <thead><tr><th className="w-12 text-right">No.</th><th>氏名</th><th>メール</th><th>人数</th><th>状態</th></tr></thead>
           <tbody>
-            {(bookings ?? []).map((b: any) => (
+            {(bookings ?? []).map((b: any, i: number) => (
               <tr key={b.id}>
+                <td className="text-right text-ink-mute tabular-nums">{i + 1}</td>
                 <td>{b.customer?.full_name ?? "—"}</td>
                 <td>{b.customer?.email ?? "—"}</td>
                 <td>{b.party_size}</td>
@@ -33,7 +34,7 @@ export default async function EditEventPage({ params }: { params: { id: string }
               </tr>
             ))}
             {(bookings ?? []).length === 0 && (
-              <tr><td colSpan={4} className="text-center text-ink-mute py-3">まだ予約はありません。</td></tr>
+              <tr><td colSpan={5} className="text-center text-ink-mute py-3">まだ予約はありません。</td></tr>
             )}
           </tbody>
         </table>

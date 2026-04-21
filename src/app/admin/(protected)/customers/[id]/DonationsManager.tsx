@@ -155,6 +155,7 @@ export default function DonationsManager({
       <table className="table">
         <thead>
           <tr>
+            <th className="w-12 text-right">No.</th>
             <th>日時</th>
             <th>金額</th>
             <th>状態</th>
@@ -163,8 +164,9 @@ export default function DonationsManager({
           </tr>
         </thead>
         <tbody>
-          {donations.map((d) => (
+          {donations.map((d, i) => (
             <tr key={d.id}>
+              <td className="text-right text-ink-mute tabular-nums">{i + 1}</td>
               <td>{formatDateTime(d.donated_at)}</td>
               <td>{formatYen(d.amount)}</td>
               <td>{d.status}</td>
@@ -193,7 +195,7 @@ export default function DonationsManager({
           ))}
           {donations.length === 0 && (
             <tr>
-              <td colSpan={5} className="text-center text-ink-mute py-3">
+              <td colSpan={6} className="text-center text-ink-mute py-3">
                 寄付履歴はまだありません。
               </td>
             </tr>

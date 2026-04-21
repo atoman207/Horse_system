@@ -1,12 +1,9 @@
-import PublicHeader from "@/components/PublicHeader";
 import bgImage from "@/assets/images/bg.png";
 import Image from "next/image";
 
 export default function HomePage() {
   return (
     <div className="min-h-screen flex flex-col relative isolate overflow-hidden">
-      <PublicHeader active="home" />
-
       <Image
         src={bgImage}
         alt=""

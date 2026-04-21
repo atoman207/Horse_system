@@ -5,9 +5,14 @@ import {
   loadActiveSupports,
   loadCustomer,
   loadCustomerSummary,
+  loadPayments,
 } from "@/lib/customer";
-import { formatDate, formatUnits, formatYen, statusLabel } from "@/lib/format";
+import { formatDate, formatUnits, formatYen } from "@/lib/format";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  describePaymentDisplay,
+  fromContractStatus,
+} from "@/lib/paymentStatus";
 
 export default async function MyPageTop() {
   const session = await requireMember();
@@ -21,17 +26,49 @@ export default async function MyPageTop() {
   }
 
   const customerId = session.customerId;
-  const [customer, summary, contract, supports] = await Promise.all([
+  const [customer, summary, contract, supports, recentPayments] = await Promise.all([
     loadCustomer(customerId),
     loadCustomerSummary(customerId),
     loadActiveContract(customerId),
     loadActiveSupports(customerId),
+    loadPayments(customerId, 3),
   ]);
 
-  const statusBadge =
-    contract?.status === "past_due" ? "chip-error" :
-    contract?.status === "canceled" ? "chip-mute" :
-    contract?.status === "active" ? "chip-ok" : "chip-warn";
+  // --- 決済状態の4分類正規化 ---
+  //   active な契約がない場合 + 支援もない場合は「停止」扱い。
+  //   active な契約がない + 支援のみある場合は支援側の状態で判定。
+  const baseStatusKey = contract
+    ? fromContractStatus(contract.status)
+    : supports.length > 0
+      ? fromContractStatus(supports[0].status)
+      : "stopped";
+
+  // 直近決済成功からの「復帰」案内（失敗→成功の救済表示）
+  const recentlyRecovered =
+    baseStatusKey === "ok" &&
+    recentPayments.some((p) => p.status === "failed") &&
+    recentPayments[0]?.status === "succeeded";
+
+  // 停止予定の判定: active なのに canceled_at が未来日付
+  const now = Date.now();
+  const scheduledStop = supports
+    .filter((s) => s.status === "active" && s.canceled_at)
+    .map((s) => ({
+      id: s.id,
+      name: s.horse?.name ?? "—",
+      date: s.canceled_at as string,
+    }))
+    .filter((s) => new Date(s.date).getTime() > now)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const displayKey =
+    scheduledStop.length > 0 && baseStatusKey === "ok"
+      ? "in_progress"
+      : baseStatusKey;
+
+  const display = describePaymentDisplay(displayKey, {
+    recentlyRecovered,
+    scheduledCancelAt: scheduledStop[0]?.date ?? null,
+  });
 
   const supabase = createSupabaseServerClient();
   const { count: bookingCount } = await supabase
@@ -46,6 +83,15 @@ export default async function MyPageTop() {
 
   const planBadgeText =
     summary?.primary_plan_name ?? (supports.length > 0 ? "支援会員" : "未加入");
+
+  // --- 次回決済日 ---
+  //   Stripe の current_period_end を最優先。
+  //   継続課金がない場合は空欄扱いとして「現在、継続課金中のご契約はありません」を表示。
+  const nextPaymentAt =
+    contract?.current_period_end ?? summary?.next_payment_at ?? null;
+  const hasActiveRecurring =
+    Boolean(nextPaymentAt) &&
+    (displayKey === "ok" || displayKey === "failed" || displayKey === "in_progress");
 
   return (
     <div className="space-y-5">
@@ -83,26 +129,47 @@ export default async function MyPageTop() {
             </Link>
           </div>
           <div>
-            <p className="label">決済状態</p>
+            <p className="label">お支払い状況</p>
             <p>
-              <span className={statusBadge}>{statusLabel(contract?.status ?? "active")}</span>
+              <span className={display.chipClass}>{display.label}</span>
             </p>
+            <p className="text-sm text-ink-soft mt-1">{display.description}</p>
           </div>
           <div>
             <p className="label">次回決済日</p>
-            <p className="text-lg">{formatDate(summary?.next_payment_at, false)}</p>
+            {hasActiveRecurring ? (
+              <p className="text-lg">{formatDate(nextPaymentAt, false)}</p>
+            ) : (
+              <p className="text-sm text-ink-soft">現在、継続課金中のご契約はありません</p>
+            )}
           </div>
           <div>
             <p className="label">月額支援合計</p>
             <p className="text-lg font-bold">{formatYen(monthlyGrandTotal)}</p>
           </div>
         </div>
-        {contract?.status === "past_due" && (
+
+        {display.bannerMessage && displayKey === "ok" && (
+          <div className="mt-3 p-3 rounded-xl bg-green-50 border border-green-200">
+            <p className="text-sm text-green-800">{display.bannerMessage}</p>
+          </div>
+        )}
+        {displayKey === "failed" && (
           <div className="mt-3 p-3 rounded-xl bg-red-50 border-2 border-red-200">
-            <p className="font-bold text-danger">お支払いに失敗しています</p>
+            <p className="font-bold text-danger">お支払いが完了していません</p>
             <p className="text-sm mt-1">
-              「お支払い情報を変更」ボタンからカードをご確認ください。
+              「お支払い情報を変更」ボタンからカード情報をご確認ください。
             </p>
+          </div>
+        )}
+        {scheduledStop.length > 0 && (
+          <div className="mt-3 p-3 rounded-xl bg-amber-50 border border-amber-200 space-y-1">
+            <p className="font-bold text-amber-800">停止予定の支援があります</p>
+            {scheduledStop.map((s) => (
+              <p key={s.id} className="text-sm">
+                {s.name}：{formatDate(s.date, false)} をもって終了予定です。
+              </p>
+            ))}
           </div>
         )}
       </section>
@@ -118,24 +185,41 @@ export default async function MyPageTop() {
           <p className="text-ink-mute">現在、ご支援中の馬はありません。</p>
         ) : (
           <ul className="divide-y divide-surface-line">
-            {supports.map((s) => (
-              <li key={s.id} className="py-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                <div className="flex-1">
-                  <p className="font-bold text-lg">{s.horse?.name ?? "—"}</p>
-                  <p className="text-sm text-ink-soft">
-                    {formatUnits(s.units)} / {formatYen(s.monthly_amount)} / 月
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Link href={`/mypage/supports/${s.id}`} className="btn-secondary py-2 px-4">
-                    変更する
-                  </Link>
-                  <Link href={`/mypage/supports/${s.id}/stop`} className="btn-ghost py-2 px-4 text-danger">
-                    停止する
-                  </Link>
-                </div>
-              </li>
-            ))}
+            {supports.map((s) => {
+              const isScheduledStop =
+                s.status === "active" &&
+                s.canceled_at &&
+                new Date(s.canceled_at).getTime() > now;
+              return (
+                <li key={s.id} className="py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="flex-1">
+                    <p className="font-bold text-lg">
+                      {s.horse?.name ?? "—"}
+                      {isScheduledStop && (
+                        <span className="chip-warn ml-2 text-xs">停止予定</span>
+                      )}
+                    </p>
+                    <p className="text-sm text-ink-soft">
+                      {formatUnits(s.units)} / {formatYen(s.monthly_amount)} / 月
+                      {isScheduledStop && (
+                        <>
+                          <br />
+                          {formatDate(s.canceled_at, false)} をもって終了予定
+                        </>
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Link href={`/mypage/supports/${s.id}`} className="btn-secondary py-2 px-4">
+                      変更する
+                    </Link>
+                    <Link href={`/mypage/supports/${s.id}/stop`} className="btn-ghost py-2 px-4 text-danger">
+                      停止する
+                    </Link>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
         <div className="mt-4">

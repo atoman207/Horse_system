@@ -56,9 +56,24 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   return NextResponse.json({ ok: true });
 }
 
-export async function DELETE(_: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   const session = await requireAdmin();
   const admin = createSupabaseAdminClient();
+  const url = new URL(req.url);
+  const hard = url.searchParams.get("hard") === "1";
+
+  if (hard) {
+    const { error } = await admin.from("support_subscriptions").delete().eq("id", params.id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await admin.from("audit_logs").insert({
+      actor_id: session.userId,
+      action: "support.delete",
+      target_table: "support_subscriptions",
+      target_id: params.id,
+    });
+    return NextResponse.json({ ok: true, hard: true });
+  }
+
   const { error } = await admin
     .from("support_subscriptions")
     .update({ status: "canceled", canceled_at: new Date().toISOString() })

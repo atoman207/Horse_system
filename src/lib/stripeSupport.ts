@@ -24,6 +24,8 @@ export type SupportSyncResult = {
   stripe_customer_id?: string | null;
   stripe_subscription_id?: string | null;
   stripe_subscription_item_id?: string | null;
+  checkout_url?: string | null;
+  requires_payment?: boolean;
 };
 
 type CustomerRow = {
@@ -43,7 +45,7 @@ async function loadSupportBasePlan() {
   const admin = createSupabaseAdminClient();
   const { data } = await admin
     .from("membership_plans")
-    .select("id, unit_amount, monthly_amount, stripe_price_id")
+    .select("id, unit_amount, monthly_amount, stripe_price_id, name")
     .eq("code", "SUPPORT")
     .eq("is_active", true)
     .order("unit_amount", { ascending: true, nullsFirst: false })
@@ -51,10 +53,44 @@ async function loadSupportBasePlan() {
     .maybeSingle();
   return data as {
     id: string;
+    name: string;
     unit_amount: number | null;
     monthly_amount: number;
     stripe_price_id: string | null;
   } | null;
+}
+
+/**
+ * Ensure the SUPPORT base plan has a Stripe price. If not, create one
+ * dynamically using the plan's `unit_amount` (yen per 1口) and persist
+ * the price id back to the DB. This lets us keep zero-config setup —
+ * no manual Stripe dashboard steps required.
+ */
+async function ensureSupportBasePrice(): Promise<{
+  id: string;
+  unit_amount: number;
+  stripe_price_id: string;
+} | null> {
+  const stripe = getStripe();
+  if (!stripe) return null;
+  const base = await loadSupportBasePlan();
+  if (!base?.unit_amount) return null;
+  if (base.stripe_price_id) {
+    return {
+      id: base.id,
+      unit_amount: base.unit_amount,
+      stripe_price_id: base.stripe_price_id,
+    };
+  }
+  const price = await stripe.prices.create({
+    currency: "jpy",
+    unit_amount: base.unit_amount,
+    recurring: { interval: "month" },
+    product_data: { name: `Retouchメンバーズ ${base.name}` },
+  });
+  const admin = createSupabaseAdminClient();
+  await admin.from("membership_plans").update({ stripe_price_id: price.id }).eq("id", base.id);
+  return { id: base.id, unit_amount: base.unit_amount, stripe_price_id: price.id };
 }
 
 export async function ensureStripeCustomer(customer: CustomerRow): Promise<string | null> {
@@ -85,18 +121,30 @@ async function ensureContractSubscription(
   basePriceId: string,
   initialQuantity: number,
   metadata: Stripe.MetadataParam,
-): Promise<{ subscriptionId: string; initialItemId: string | null }> {
+): Promise<{
+  subscriptionId: string;
+  initialItemId: string | null;
+  checkoutUrl: string | null;
+  requiresPayment: boolean;
+}> {
   const stripe = getStripe();
   if (!stripe) throw new Error("stripe not configured");
   if (contract.stripe_subscription_id) {
-    return { subscriptionId: contract.stripe_subscription_id, initialItemId: null };
+    return {
+      subscriptionId: contract.stripe_subscription_id,
+      initialItemId: null,
+      checkoutUrl: null,
+      requiresPayment: false,
+    };
   }
   const sub = await stripe.subscriptions.create({
     customer: stripeCustomerId,
     items: [{ price: basePriceId, quantity: initialQuantity, metadata }],
     collection_method: "charge_automatically",
+    payment_behavior: "default_incomplete",
     proration_behavior: "create_prorations",
     metadata: { contract_id: contract.id },
+    expand: ["latest_invoice"],
   });
   const admin = createSupabaseAdminClient();
   await admin
@@ -114,8 +162,16 @@ async function ensureContractSubscription(
         : null,
     })
     .eq("id", contract.id);
+  const invoice = typeof sub.latest_invoice === "string" ? null : sub.latest_invoice;
+  const statusNeedsPayment = ["incomplete", "past_due", "unpaid"].includes(sub.status);
+  const checkoutUrl = invoice?.hosted_invoice_url ?? null;
   const itemId = sub.items.data[0]?.id ?? null;
-  return { subscriptionId: sub.id, initialItemId: itemId };
+  return {
+    subscriptionId: sub.id,
+    initialItemId: itemId,
+    checkoutUrl,
+    requiresPayment: statusNeedsPayment || Boolean(checkoutUrl),
+  };
 }
 
 function toQuantity(monthlyAmount: number, baseUnitAmount: number): number {
@@ -141,10 +197,8 @@ export async function syncSupportCreate(params: {
 }): Promise<SupportSyncResult> {
   const stripe = getStripe();
   if (!stripe) return { synced: false, reason: "stripe_disabled" };
-  const base = await loadSupportBasePlan();
-  if (!base?.stripe_price_id || !base.unit_amount) {
-    return { synced: false, reason: "base_price_missing" };
-  }
+  const base = await ensureSupportBasePrice();
+  if (!base) return { synced: false, reason: "base_price_missing" };
 
   const stripeCustomerId = await ensureStripeCustomer(params.customer);
   if (!stripeCustomerId) return { synced: false, reason: "customer_creation_failed" };
@@ -197,6 +251,8 @@ export async function syncSupportCreate(params: {
       stripe_customer_id: stripeCustomerId,
       stripe_subscription_id: ensured.subscriptionId,
       stripe_subscription_item_id: ensured.initialItemId,
+      checkout_url: ensured.checkoutUrl,
+      requires_payment: ensured.requiresPayment,
     };
   }
 
@@ -242,32 +298,60 @@ export async function syncSupportUpdate(params: {
   return { synced: true, stripe_subscription_item_id: item.id };
 }
 
+/**
+ * 支援停止同期。
+ *
+ * 仕様:
+ *   - デフォルトは「次回更新日で停止」(cancel_at_period_end = true)。
+ *     誤操作リスクを下げるため、即時解約はしない。
+ *   - 最後の1アイテムの場合はサブスクリプション全体を period_end 解約。
+ *   - 複数アイテム残る場合は即時アイテム削除（Stripe仕様上、部分の
+ *     予約解約が標準では行えないため。必要になった段階で
+ *     Subscription Schedule への置き換えを検討する）。
+ *   - `immediate=true` を指定した場合のみ、即時解約を行う（管理者用）。
+ *
+ * 戻り値に `scheduled_cancel_at`（ISO文字列）が含まれる場合、呼び出し
+ * 元は DB 側の `canceled_at` にその値を保存し、status は `active` の
+ * ままにする（停止予定のUI表示用）。実際に status=`canceled` に落と
+ * すのは Webhook（customer.subscription.deleted）の責務。
+ */
 export async function syncSupportCancel(params: {
   stripe_subscription_item_id: string | null;
   stripe_subscription_id: string | null;
-}): Promise<SupportSyncResult> {
+  immediate?: boolean;
+}): Promise<SupportSyncResult & { scheduled_cancel_at?: string | null }> {
   const stripe = getStripe();
   if (!stripe) return { synced: false, reason: "stripe_disabled" };
   if (!params.stripe_subscription_item_id) return { synced: false, reason: "item_missing" };
 
-  // If this is the only item left, cancelling the item fails; cancel
-  // the whole subscription instead.
   if (params.stripe_subscription_id) {
-    try {
-      const sub = await stripe.subscriptions.retrieve(params.stripe_subscription_id);
-      if (sub.items.data.length <= 1) {
+    const sub = await stripe.subscriptions.retrieve(params.stripe_subscription_id);
+    const isLastItem = sub.items.data.length <= 1;
+
+    if (isLastItem) {
+      if (params.immediate) {
         await stripe.subscriptions.cancel(params.stripe_subscription_id, {
           invoice_now: false,
           prorate: true,
         });
-        return { synced: true, stripe_subscription_id: sub.id };
+        return { synced: true, stripe_subscription_id: sub.id, scheduled_cancel_at: null };
       }
-    } catch {
-      // fall through to item deletion
+      const updated = await stripe.subscriptions.update(params.stripe_subscription_id, {
+        cancel_at_period_end: true,
+      });
+      const scheduled = updated.current_period_end
+        ? new Date(updated.current_period_end * 1000).toISOString()
+        : null;
+      return {
+        synced: true,
+        stripe_subscription_id: sub.id,
+        scheduled_cancel_at: scheduled,
+      };
     }
   }
+
   await stripe.subscriptionItems.del(params.stripe_subscription_item_id, {
     proration_behavior: "create_prorations",
   });
-  return { synced: true };
+  return { synced: true, scheduled_cancel_at: null };
 }

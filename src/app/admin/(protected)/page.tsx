@@ -59,13 +59,33 @@ export default async function AdminDashboardPage() {
         ))}
       </div>
 
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Link href="/admin/customers" className="card hover:shadow-lg transition text-center py-4">
+          <p className="font-bold">顧客一覧</p>
+          <p className="text-xs text-ink-soft mt-1">検索・編集・履歴</p>
+        </Link>
+        <Link href="/admin/supports" className="card hover:shadow-lg transition text-center py-4">
+          <p className="font-bold">支援管理</p>
+          <p className="text-xs text-ink-soft mt-1">馬ごと・口数・状態</p>
+        </Link>
+        <Link href="/admin/contracts" className="card hover:shadow-lg transition text-center py-4">
+          <p className="font-bold">契約一覧</p>
+          <p className="text-xs text-ink-soft mt-1">A/B/C・停止処理</p>
+        </Link>
+        <Link href="/admin/payments" className="card hover:shadow-lg transition text-center py-4">
+          <p className="font-bold">決済履歴</p>
+          <p className="text-xs text-ink-soft mt-1">成功・失敗・返金</p>
+        </Link>
+      </div>
+
       <section className="card">
         <h2 className="section-title">直近の決済</h2>
         <table className="table">
-          <thead><tr><th>日時</th><th>顧客</th><th>種別</th><th>金額</th><th>状態</th></tr></thead>
+          <thead><tr><th className="w-12 text-right">No.</th><th>日時</th><th>顧客</th><th>種別</th><th>金額</th><th>状態</th></tr></thead>
           <tbody>
-            {(recentPayments ?? []).map((p: any) => (
+            {(recentPayments ?? []).map((p: any, i: number) => (
               <tr key={p.id}>
+                <td className="text-right text-ink-mute tabular-nums">{i + 1}</td>
                 <td>{formatDate(p.occurred_at, true)}</td>
                 <td>{p.customer?.full_name ?? "—"}</td>
                 <td>{p.kind}</td>
@@ -74,7 +94,7 @@ export default async function AdminDashboardPage() {
               </tr>
             ))}
             {(recentPayments ?? []).length === 0 && (
-              <tr><td colSpan={5} className="text-center text-ink-mute">決済履歴はまだありません。</td></tr>
+              <tr><td colSpan={6} className="text-center text-ink-mute">決済履歴はまだありません。</td></tr>
             )}
           </tbody>
         </table>

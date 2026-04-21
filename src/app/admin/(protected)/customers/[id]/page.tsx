@@ -93,10 +93,11 @@ export default async function CustomerDetail({ params }: { params: { id: string 
       <section className="card">
         <h2 className="section-title">支援履歴</h2>
         <table className="table">
-          <thead><tr><th>馬</th><th>口数</th><th>月額</th><th>状態</th><th>開始</th><th>停止</th></tr></thead>
+          <thead><tr><th className="w-12 text-right">No.</th><th>馬</th><th>口数</th><th>月額</th><th>状態</th><th>開始</th><th>停止</th></tr></thead>
           <tbody>
-            {(supports ?? []).map((x: any) => (
+            {(supports ?? []).map((x: any, i: number) => (
               <tr key={x.id}>
+                <td className="text-right text-ink-mute tabular-nums">{i + 1}</td>
                 <td>{x.horse?.name ?? "—"}</td>
                 <td>{formatUnits(x.units)}</td>
                 <td>{formatYen(x.monthly_amount)}</td>
@@ -105,7 +106,7 @@ export default async function CustomerDetail({ params }: { params: { id: string 
                 <td>{x.canceled_at ? formatDate(x.canceled_at) : "—"}</td>
               </tr>
             ))}
-            {(supports ?? []).length === 0 && <tr><td colSpan={6} className="text-center text-ink-mute py-3">支援履歴はまだありません。</td></tr>}
+            {(supports ?? []).length === 0 && <tr><td colSpan={7} className="text-center text-ink-mute py-3">支援履歴はまだありません。</td></tr>}
           </tbody>
         </table>
       </section>
@@ -116,9 +117,9 @@ export default async function CustomerDetail({ params }: { params: { id: string 
           <p className="text-ink-mute text-sm">変更・停止の履歴はまだありません。</p>
         ) : (
           <table className="table">
-            <thead><tr><th>日時</th><th>種別</th><th>対象馬</th><th>内容</th></tr></thead>
+            <thead><tr><th className="w-12 text-right">No.</th><th>日時</th><th>種別</th><th>対象馬</th><th>内容</th></tr></thead>
             <tbody>
-              {(supportAudits ?? []).map((a: any) => {
+              {(supportAudits ?? []).map((a: any, i: number) => {
                 const m = a.meta ?? {};
                 const kind =
                   a.action === "support.create" ? "新規追加" :
@@ -136,6 +137,7 @@ export default async function CustomerDetail({ params }: { params: { id: string 
                 }
                 return (
                   <tr key={a.id}>
+                    <td className="text-right text-ink-mute tabular-nums">{i + 1}</td>
                     <td>{formatDate(a.created_at, true)}</td>
                     <td>
                       <span className={
@@ -156,10 +158,11 @@ export default async function CustomerDetail({ params }: { params: { id: string 
       <section className="card">
         <h2 className="section-title">契約</h2>
         <table className="table">
-          <thead><tr><th>プラン</th><th>状態</th><th>開始</th><th>次回決済</th><th>停止</th></tr></thead>
+          <thead><tr><th className="w-12 text-right">No.</th><th>プラン</th><th>状態</th><th>開始</th><th>次回決済</th><th>停止</th></tr></thead>
           <tbody>
-            {(contracts ?? []).map((x: any) => (
+            {(contracts ?? []).map((x: any, i: number) => (
               <tr key={x.id}>
+                <td className="text-right text-ink-mute tabular-nums">{i + 1}</td>
                 <td>{x.plan?.name ?? "—"}</td>
                 <td>{statusLabel(x.status)}</td>
                 <td>{formatDate(x.started_at)}</td>
@@ -167,7 +170,7 @@ export default async function CustomerDetail({ params }: { params: { id: string 
                 <td>{x.canceled_at ? formatDate(x.canceled_at) : "—"}</td>
               </tr>
             ))}
-            {(contracts ?? []).length === 0 && <tr><td colSpan={5} className="text-center text-ink-mute py-3">契約はまだありません。</td></tr>}
+            {(contracts ?? []).length === 0 && <tr><td colSpan={6} className="text-center text-ink-mute py-3">契約はまだありません。</td></tr>}
           </tbody>
         </table>
       </section>
@@ -175,17 +178,18 @@ export default async function CustomerDetail({ params }: { params: { id: string 
       <section className="card">
         <h2 className="section-title">寄付履歴</h2>
         <table className="table">
-          <thead><tr><th>日時</th><th>金額</th><th>状態</th><th>メッセージ</th></tr></thead>
+          <thead><tr><th className="w-12 text-right">No.</th><th>日時</th><th>金額</th><th>状態</th><th>メッセージ</th></tr></thead>
           <tbody>
-            {(donations ?? []).map((d: any) => (
+            {(donations ?? []).map((d: any, i: number) => (
               <tr key={d.id}>
+                <td className="text-right text-ink-mute tabular-nums">{i + 1}</td>
                 <td>{formatDate(d.donated_at, true)}</td>
                 <td>{formatYen(d.amount)}</td>
                 <td>{statusLabel(d.status)}</td>
                 <td className="text-xs">{d.message ?? "—"}</td>
               </tr>
             ))}
-            {(donations ?? []).length === 0 && <tr><td colSpan={4} className="text-center text-ink-mute py-3">寄付履歴はまだありません。</td></tr>}
+            {(donations ?? []).length === 0 && <tr><td colSpan={5} className="text-center text-ink-mute py-3">寄付履歴はまだありません。</td></tr>}
           </tbody>
         </table>
       </section>
@@ -193,17 +197,18 @@ export default async function CustomerDetail({ params }: { params: { id: string 
       <section className="card">
         <h2 className="section-title">見学会・個別見学 履歴</h2>
         <table className="table">
-          <thead><tr><th>種別</th><th>タイトル</th><th>日時</th><th>状態</th></tr></thead>
+          <thead><tr><th className="w-12 text-right">No.</th><th>種別</th><th>タイトル</th><th>日時</th><th>状態</th></tr></thead>
           <tbody>
-            {(bookings ?? []).map((b: any) => (
+            {(bookings ?? []).map((b: any, i: number) => (
               <tr key={b.id}>
+                <td className="text-right text-ink-mute tabular-nums">{i + 1}</td>
                 <td>{b.event?.type === "private_visit" ? "個別見学" : "見学会"}</td>
                 <td>{b.event?.title}</td>
                 <td>{formatDate(b.event?.starts_at, true)}</td>
                 <td>{statusLabel(b.status)}</td>
               </tr>
             ))}
-            {(bookings ?? []).length === 0 && <tr><td colSpan={4} className="text-center text-ink-mute py-3">見学履歴はまだありません。</td></tr>}
+            {(bookings ?? []).length === 0 && <tr><td colSpan={5} className="text-center text-ink-mute py-3">見学履歴はまだありません。</td></tr>}
           </tbody>
         </table>
       </section>
@@ -211,10 +216,11 @@ export default async function CustomerDetail({ params }: { params: { id: string 
       <section className="card">
         <h2 className="section-title">決済履歴</h2>
         <table className="table">
-          <thead><tr><th>日時</th><th>種別</th><th>金額</th><th>状態</th><th>失敗理由</th></tr></thead>
+          <thead><tr><th className="w-12 text-right">No.</th><th>日時</th><th>種別</th><th>金額</th><th>状態</th><th>失敗理由</th></tr></thead>
           <tbody>
-            {(payments ?? []).map((p: any) => (
+            {(payments ?? []).map((p: any, i: number) => (
               <tr key={p.id}>
+                <td className="text-right text-ink-mute tabular-nums">{i + 1}</td>
                 <td>{formatDate(p.occurred_at, true)}</td>
                 <td>{p.kind}</td>
                 <td>{formatYen(p.amount)}</td>
@@ -222,7 +228,7 @@ export default async function CustomerDetail({ params }: { params: { id: string 
                 <td className="text-xs">{p.failure_reason ?? "—"}</td>
               </tr>
             ))}
-            {(payments ?? []).length === 0 && <tr><td colSpan={5} className="text-center text-ink-mute py-3">決済履歴はまだありません。</td></tr>}
+            {(payments ?? []).length === 0 && <tr><td colSpan={6} className="text-center text-ink-mute py-3">決済履歴はまだありません。</td></tr>}
           </tbody>
         </table>
       </section>

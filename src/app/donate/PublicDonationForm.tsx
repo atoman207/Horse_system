@@ -22,6 +22,10 @@ export default function PublicDonationForm() {
       setError("金額は100円以上で指定してください。");
       return;
     }
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError("お礼メール送付のため、メールアドレスをご入力ください。");
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch("/api/donations", {
@@ -84,16 +88,19 @@ export default function PublicDonationForm() {
       </div>
 
       <div>
-        <label className="label">メールアドレス（お礼メール送付先）</label>
+        <label className="label">
+          メールアドレス <span className="text-danger">（必須：お礼メール送付先）</span>
+        </label>
         <input
           type="email"
+          required
           className="input"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="example@example.com"
         />
         <p className="text-xs text-ink-mute mt-1">
-          メールアドレスのみで自動的にお礼メールをお送りします。
+          寄付確認メールをお送りするため、メールアドレスの入力をお願いしております。
         </p>
       </div>
 
@@ -110,7 +117,7 @@ export default function PublicDonationForm() {
       {error && <p className="text-danger text-sm">{error}</p>}
 
       <button className="btn-primary w-full" disabled={saving}>
-        {saving ? "処理中..." : `${formatYen(amount)} を寄付する`}
+        {saving ? "処理中..." : "この内容で寄付する"}
       </button>
       <p className="text-xs text-ink-mute">
         Stripe の決済ページへ移動します。カード情報は当サイトでは保存されません。
