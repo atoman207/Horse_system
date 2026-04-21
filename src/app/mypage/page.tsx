@@ -7,6 +7,7 @@ import {
   loadCustomerSummary,
 } from "@/lib/customer";
 import { formatDate, formatUnits, formatYen, statusLabel } from "@/lib/format";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export default async function MyPageTop() {
   const session = await requireMember();
@@ -32,17 +33,54 @@ export default async function MyPageTop() {
     contract?.status === "canceled" ? "chip-mute" :
     contract?.status === "active" ? "chip-ok" : "chip-warn";
 
+  const supabase = createSupabaseServerClient();
+  const { count: bookingCount } = await supabase
+    .from("bookings")
+    .select("id", { count: "exact", head: true })
+    .eq("customer_id", customerId)
+    .eq("status", "reserved");
+
+  const supportMonthlyTotal = supports.reduce((sum, s) => sum + Number(s.monthly_amount ?? 0), 0);
+  const basicMonthly = contract?.plan?.monthly_amount ?? 0;
+  const monthlyGrandTotal = supportMonthlyTotal + basicMonthly;
+
+  const planBadgeText =
+    summary?.primary_plan_name ?? (supports.length > 0 ? "支援会員" : "未加入");
+
   return (
     <div className="space-y-5">
-      <section className="card">
-        <p className="text-sm text-ink-mute">こんにちは</p>
+      {/* One-glance status banner */}
+      <section className="card bg-gradient-to-br from-brand to-brand-dark text-white">
+        <p className="text-sm opacity-90">こんにちは</p>
         <h1 className="text-2xl font-bold">{customer?.full_name ?? "会員"}様</h1>
-        <div className="grid sm:grid-cols-2 gap-3 mt-4">
+        <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <p className="text-xs opacity-80">会員種別</p>
+            <p className="text-base font-bold mt-1">{planBadgeText}</p>
+          </div>
+          <div>
+            <p className="text-xs opacity-80">支援中</p>
+            <p className="text-base font-bold mt-1">{supports.length}頭</p>
+          </div>
+          <div>
+            <p className="text-xs opacity-80">月額合計</p>
+            <p className="text-base font-bold mt-1">{formatYen(monthlyGrandTotal)}</p>
+          </div>
+          <div>
+            <p className="text-xs opacity-80">予約</p>
+            <p className="text-base font-bold mt-1">{bookingCount ?? 0}件</p>
+          </div>
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="grid sm:grid-cols-2 gap-3">
           <div>
             <p className="label">現在の会員種別</p>
-            <p className="text-lg font-bold">
-              {summary?.primary_plan_name ?? (supports.length > 0 ? "支援会員" : "未加入")}
-            </p>
+            <p className="text-lg font-bold">{planBadgeText}</p>
+            <Link href="/mypage/plan" className="text-brand underline text-sm">
+              会員種別を変更
+            </Link>
           </div>
           <div>
             <p className="label">決済状態</p>
@@ -56,9 +94,17 @@ export default async function MyPageTop() {
           </div>
           <div>
             <p className="label">月額支援合計</p>
-            <p className="text-lg font-bold">{formatYen(summary?.monthly_total ?? 0)}</p>
+            <p className="text-lg font-bold">{formatYen(monthlyGrandTotal)}</p>
           </div>
         </div>
+        {contract?.status === "past_due" && (
+          <div className="mt-3 p-3 rounded-xl bg-red-50 border-2 border-red-200">
+            <p className="font-bold text-danger">お支払いに失敗しています</p>
+            <p className="text-sm mt-1">
+              「お支払い情報を変更」ボタンからカードをご確認ください。
+            </p>
+          </div>
+        )}
       </section>
 
       <section className="card">

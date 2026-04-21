@@ -87,14 +87,27 @@ export default async function BookingListPage() {
         ) : (
           <ul className="divide-y divide-surface-line">
             {myBookings.map((b) => (
-              <li key={b.id} className="py-3 flex items-center justify-between">
+              <li key={b.id} className="py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <div>
                   <p className="font-bold">{b.event?.title}</p>
-                  <p className="text-xs text-ink-soft">{formatDate(b.event?.starts_at, true)}</p>
+                  <p className="text-xs text-ink-soft">
+                    {formatDate(b.event?.starts_at, true)} ・ {b.party_size}名
+                  </p>
+                  {b.note && <p className="text-xs text-ink-mute mt-1">メモ：{b.note}</p>}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={b.status === "reserved" ? "chip-ok" : "chip-mute"}>{statusLabel(b.status)}</span>
-                  {b.status === "reserved" && <BookingButton eventId={b.event_id} cancel />}
+                  {b.status === "reserved" && (
+                    <>
+                      <BookingButton
+                        eventId={b.event_id}
+                        edit
+                        initialPartySize={b.party_size}
+                        initialNote={b.note}
+                      />
+                      <BookingButton eventId={b.event_id} cancel />
+                    </>
+                  )}
                 </div>
               </li>
             ))}

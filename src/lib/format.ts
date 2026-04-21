@@ -23,6 +23,21 @@ export function formatUnits(units: number | null | undefined): string {
   return Number.isInteger(n) ? `${n}口` : `${n.toFixed(1)}口`;
 }
 
+export function genderLabel(gender: string | null | undefined): string {
+  switch (gender) {
+    case "male":
+      return "男性";
+    case "female":
+      return "女性";
+    case "other":
+      return "その他";
+    case "unspecified":
+      return "未指定";
+    default:
+      return "—";
+  }
+}
+
 export function statusLabel(status: string | null | undefined): string {
   switch (status) {
     case "active":

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { formatDate, formatUnits, formatYen, statusLabel } from "@/lib/format";
+import { formatDate, formatUnits, formatYen, genderLabel, statusLabel } from "@/lib/format";
 import MemoEditor from "./MemoEditor";
 import StatusEditor from "./StatusEditor";
 
@@ -81,7 +81,7 @@ export default async function CustomerDetail({ params }: { params: { id: string 
           <div className="flex justify-between py-1.5 border-b border-surface-line"><dt className="text-ink-soft">メール</dt><dd>{c.email}</dd></div>
           <div className="flex justify-between py-1.5 border-b border-surface-line"><dt className="text-ink-soft">電話</dt><dd>{c.phone ?? "—"}</dd></div>
           <div className="flex justify-between py-1.5 border-b border-surface-line"><dt className="text-ink-soft">生年月日</dt><dd>{c.birthday ?? "—"}</dd></div>
-          <div className="flex justify-between py-1.5 border-b border-surface-line"><dt className="text-ink-soft">性別</dt><dd>{c.gender ?? "—"}</dd></div>
+          <div className="flex justify-between py-1.5 border-b border-surface-line"><dt className="text-ink-soft">性別</dt><dd>{genderLabel(c.gender)}</dd></div>
           <div className="flex justify-between py-1.5 border-b border-surface-line md:col-span-2"><dt className="text-ink-soft">住所</dt>
             <dd className="text-right">{c.postal_code ? `〒${c.postal_code} ` : ""}{c.address1} {c.address2}</dd>
           </div>

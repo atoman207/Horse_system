@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import {
+  donationThanksTemplate,
+  notify,
+  paymentFailedTemplate,
+} from "@/lib/notify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,6 +57,33 @@ export async function POST(req: Request) {
               stripe_payment_intent_id: (session.payment_intent as string) ?? null,
               occurred_at: new Date(session.created * 1000).toISOString(),
               raw: session as any,
+            });
+
+            // Send thank-you email
+            const donorEmail = (donation as any).donor_email
+              || session.customer_details?.email
+              || session.customer_email
+              || null;
+            let donorName = (donation as any).donor_name as string | null;
+            if (!donorName && (donation as any).customer_id) {
+              const { data: cust } = await admin
+                .from("customers")
+                .select("full_name")
+                .eq("id", (donation as any).customer_id)
+                .maybeSingle();
+              donorName = (cust as any)?.full_name ?? null;
+            }
+            const tpl = donationThanksTemplate({
+              name: donorName,
+              amount: (donation as any).amount,
+            });
+            await notify({
+              kind: "donation_thanks",
+              to: donorEmail,
+              to_name: donorName,
+              subject: tpl.subject,
+              body_text: tpl.body_text,
+              meta: { donation_id: (donation as any).id, session_id: session.id },
             });
           }
         }
@@ -129,6 +161,26 @@ export async function POST(req: Request) {
 
         if (event.type === "invoice.payment_failed" && contract) {
           await admin.from("contracts").update({ status: "past_due" }).eq("id", (contract as any).id);
+          const { data: fullCust } = await admin
+            .from("customers")
+            .select("full_name, email")
+            .eq("id", (customer as any)?.id)
+            .maybeSingle();
+          const tpl = paymentFailedTemplate({
+            name: (fullCust as any)?.full_name ?? null,
+            contractId: (contract as any).id,
+          });
+          await notify({
+            kind: "payment_failed",
+            to: (fullCust as any)?.email ?? null,
+            to_name: (fullCust as any)?.full_name ?? null,
+            subject: tpl.subject,
+            body_text: tpl.body_text,
+            meta: {
+              contract_id: (contract as any).id,
+              invoice_id: invoice.id,
+            },
+          });
         }
         break;
       }
