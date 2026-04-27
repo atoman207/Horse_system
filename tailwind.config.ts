@@ -28,12 +28,18 @@ const config: Config = {
       },
       fontFamily: {
         sans: [
+          "var(--font-noto-sans-jp)",
           "Hiragino Sans",
           "Hiragino Kaku Gothic ProN",
           "Noto Sans JP",
           "Meiryo",
           "system-ui",
           "sans-serif",
+        ],
+        brand: [
+          "var(--font-pacifico)",
+          "Pacifico",
+          "cursive",
         ],
       },
       borderRadius: {

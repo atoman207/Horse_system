@@ -11,7 +11,10 @@
     "seed": "tsx scripts/seed.ts",
     "seed:xlsx": "tsx scripts/seed-from-xlsx.ts",
     "smoke": "tsx scripts/smoke-test.ts",
-    "smtp:test": "tsx scripts/smtp-test.ts"
+    "smoke:bookings": "tsx scripts/smoke-bookings.ts",
+    "smtp:test": "tsx scripts/smtp-test.ts",
+    "test": "tsx --test tests/**/*.test.ts",
+    "preflight": "tsx scripts/preflight.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

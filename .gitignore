@@ -13,3 +13,10 @@ dist/
 coverage/
 tsconfig.tsbuildinfo
 next-env.d.ts
+
+# Editor / OS / stray git
+.git2/
+.tmp/
+*.tmp.*
+*.swp
+Thumbs.db

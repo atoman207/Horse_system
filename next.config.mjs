@@ -1,8 +1,19 @@
 /** @type {import('next').NextConfig} */
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+const siteHost = (() => {
+  try {
+    return new URL(siteUrl).host;
+  } catch {
+    return "localhost:3000";
+  }
+})();
+
 const nextConfig = {
   reactStrictMode: true,
   experimental: {
-    serverActions: { allowedOrigins: ["localhost:3000"] },
+    serverActions: {
+      allowedOrigins: Array.from(new Set(["localhost:3000", siteHost])),
+    },
   },
   images: {
     remotePatterns: [

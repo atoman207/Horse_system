@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 
@@ -44,20 +43,8 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
 
   return (
     <div className="min-h-screen grid grid-cols-1 md:grid-cols-[240px_1fr]">
-      <aside className="bg-brand-dark text-white md:sticky md:top-0 md:h-screen md:overflow-y-auto">
-        <div className="p-4 border-b border-white/10 flex items-center gap-3">
-          <span className="bg-white rounded-lg p-1 flex items-center">
-            <Image
-              src="/logo.png"
-              alt="Retouch"
-              width={140}
-              height={40}
-              className="h-8 w-auto"
-            />
-          </span>
-          <span className="font-bold text-sm">管理画面</span>
-        </div>
-        <nav className="p-2 flex md:flex-col gap-1 overflow-x-auto md:overflow-x-visible">
+      <aside className="bg-brand-dark text-white md:sticky md:top-[73px] md:h-[calc(100vh-73px)] md:overflow-y-auto">
+        <nav className="p-2 pt-4 flex md:flex-col gap-1 overflow-x-auto md:overflow-x-visible">
           {navGroups.map((g) => (
             <div key={g.label} className="md:mb-2 md:block flex gap-1">
               <p className="hidden md:block text-[10px] uppercase tracking-wider text-white/50 px-3 pt-2 pb-1">

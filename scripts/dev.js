@@ -10,15 +10,26 @@ const { spawn } = require("node:child_process");
 const BASE_PORT = Number(process.env.PORT) || 3000;
 const MAX_TRIES = 10;
 
-function isPortFree(port) {
+// Probe a single host. Resolves true iff a listener can bind there.
+function isPortFreeOn(port, host) {
   return new Promise((resolve) => {
     const server = net.createServer();
     server.once("error", () => resolve(false));
     server.once("listening", () => {
       server.close(() => resolve(true));
     });
-    server.listen(port, "0.0.0.0");
+    server.listen(port, host);
   });
+}
+
+// Next.js binds dual-stack on `::` by default; on Windows an IPv6 listener
+// on :::3000 doesn't conflict with an IPv4 0.0.0.0 probe, so we must probe
+// both families to detect a stale dev server.
+async function isPortFree(port) {
+  const v6 = await isPortFreeOn(port, "::");
+  if (!v6) return false;
+  const v4 = await isPortFreeOn(port, "0.0.0.0");
+  return v4;
 }
 
 async function pickPort() {

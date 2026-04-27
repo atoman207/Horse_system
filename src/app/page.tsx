@@ -20,7 +20,7 @@ export default function HomePage() {
         className="absolute inset-0 z-20 bg-gradient-to-t from-black/35 via-transparent to-transparent"
       />
 
-      <main className="relative z-30 flex-1 flex items-end px-4 sm:px-6 lg:px-8 py-10 sm:py-12">
+      <main className="relative z-30 flex-1 flex flex-col items-stretch justify-end px-4 sm:px-6 lg:px-8 py-10 sm:py-12">
         <div className="w-full max-w-7xl mx-auto">
           <div className="grid gap-3 sm:gap-4 md:grid-cols-3 lg:gap-5">
             <section className="feature-card hero-fade hero-delay-1 feature-float">
@@ -63,7 +63,7 @@ export default function HomePage() {
       </main>
 
       <footer className="relative z-30 py-5 text-center text-xs text-white/80">
-        © Retouchメンバーズサイト
+        © <span className="font-brand text-sm align-middle">Retouch</span> メンバーズサイト
       </footer>
     </div>
   );

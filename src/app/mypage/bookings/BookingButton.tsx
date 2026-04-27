@@ -9,6 +9,7 @@ export default function BookingButton({
   edit,
   initialPartySize,
   initialNote,
+  maxPartySize = 20,
 }: {
   eventId: string;
   disabled?: boolean;
@@ -16,11 +17,15 @@ export default function BookingButton({
   edit?: boolean;
   initialPartySize?: number;
   initialNote?: string | null;
+  maxPartySize?: number;
 }) {
   const router = useRouter();
+  const max = Math.max(1, Math.min(20, maxPartySize));
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
-  const [partySize, setPartySize] = useState(initialPartySize ?? 1);
+  const [partySize, setPartySize] = useState(
+    Math.max(1, Math.min(max, initialPartySize ?? 1)),
+  );
   const [note, setNote] = useState(initialNote ?? "");
   const [err, setErr] = useState<string | null>(null);
 
@@ -76,14 +81,18 @@ export default function BookingButton({
   return (
     <div className="w-full space-y-2 p-3 border-2 border-surface-line rounded-xl bg-surface-soft">
       <div>
-        <label className="label">人数</label>
+        <label className="label">
+          人数 <span className="text-ink-mute font-normal">（最大 {max} 名）</span>
+        </label>
         <input
           type="number"
           min={1}
-          max={20}
+          max={max}
           className="input"
           value={partySize}
-          onChange={(e) => setPartySize(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+          onChange={(e) =>
+            setPartySize(Math.max(1, Math.min(max, Number(e.target.value) || 1)))
+          }
         />
       </div>
       <div>

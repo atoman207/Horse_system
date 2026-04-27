@@ -39,11 +39,16 @@ export default async function AdminDashboardPage() {
       .limit(5),
   ]);
 
-  const cards = [
-    { label: "会員数", value: customersTotal ?? 0 },
-    { label: "継続契約", value: activeContracts ?? 0 },
-    { label: "決済失敗", value: pastDueCount ?? 0, warn: (pastDueCount ?? 0) > 0 },
-    { label: "本日の予約", value: bookingsToday ?? 0 },
+  const cards: Array<{ label: string; value: number; warn?: boolean; href?: string }> = [
+    { label: "会員数", value: customersTotal ?? 0, href: "/admin/customers" },
+    { label: "継続契約", value: activeContracts ?? 0, href: "/admin/contracts" },
+    {
+      label: "決済失敗",
+      value: pastDueCount ?? 0,
+      warn: (pastDueCount ?? 0) > 0,
+      href: "/admin/payments?status=failed",
+    },
+    { label: "本日の予約", value: bookingsToday ?? 0, href: "/admin/bookings" },
   ];
 
   return (
@@ -51,12 +56,30 @@ export default async function AdminDashboardPage() {
       <h1 className="text-2xl font-bold">ダッシュボード</h1>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {cards.map((c) => (
-          <div key={c.label} className="card">
-            <p className="text-xs text-ink-soft">{c.label}</p>
-            <p className={`text-2xl font-bold ${c.warn ? "text-danger" : ""}`}>{c.value}</p>
-          </div>
-        ))}
+        {cards.map((c) => {
+          const inner = (
+            <>
+              <p className="text-xs text-ink-soft">{c.label}</p>
+              <p className={`text-2xl font-bold ${c.warn ? "text-danger" : ""}`}>{c.value}</p>
+              {c.warn && (
+                <p className="text-[11px] text-danger mt-1">→ 対応が必要です</p>
+              )}
+            </>
+          );
+          return c.href ? (
+            <Link
+              key={c.label}
+              href={c.href}
+              className={`card hover:shadow-lg transition ${c.warn ? "ring-2 ring-danger/40" : ""}`}
+            >
+              {inner}
+            </Link>
+          ) : (
+            <div key={c.label} className="card">
+              {inner}
+            </div>
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

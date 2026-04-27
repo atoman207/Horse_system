@@ -49,6 +49,30 @@ export default function CsvPage() {
         />
       </div>
 
+      <div className="card">
+        <h2 className="section-title">見学会・イベント</h2>
+        <p className="text-sm text-ink-soft mb-3">
+          イベントマスタと、各イベントの定員・予約数・残席をまとめて出力します。
+        </p>
+        <CsvTools
+          exportHref="/api/admin/csv/events"
+          exportLabel="イベントCSVをエクスポート"
+          downloadName="events.csv"
+        />
+      </div>
+
+      <div className="card">
+        <h2 className="section-title">予約履歴</h2>
+        <p className="text-sm text-ink-soft mb-3">
+          すべての見学予約を出力します。<code>?event_id=...</code> をURLに付けると単一イベントに絞れます。
+        </p>
+        <CsvTools
+          exportHref="/api/admin/csv/bookings"
+          exportLabel="予約CSVをエクスポート"
+          downloadName="bookings.csv"
+        />
+      </div>
+
       <div className="card text-sm">
         <h2 className="section-title">CSV 列定義</h2>
         <p className="font-bold mt-2">顧客 customers.csv</p>

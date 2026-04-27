@@ -57,11 +57,14 @@ export default async function AdminAuditLogsPage({
     "payment.update", "payment.delete",
     "donation.create", "donation.update", "donation.delete",
     "customer.create", "customer.update", "customer.withdraw",
+    "event.create", "event.update", "event.unpublish", "event.delete",
+    "booking.create", "booking.update", "booking.cancel", "booking.delete",
+    "booking.self_create", "booking.self_update", "booking.self_cancel",
     "notify.donation_thanks", "notify.booking_confirmed", "notify.payment_failed", "notify.plan_changed",
   ];
   const uniqueTables = [
     "contracts", "support_subscriptions", "membership_plans",
-    "customers", "donations", "payments", "bookings",
+    "customers", "donations", "payments", "bookings", "events",
     "notifications",
   ];
 

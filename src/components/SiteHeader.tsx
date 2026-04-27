@@ -25,9 +25,9 @@ export default async function SiteHeader() {
       <div className="w-full flex items-center justify-between gap-3 py-3 pr-[5vw]">
         <Link
           href="/"
-          className="flex items-center min-w-0"
+          className="flex items-center min-w-0 gap-3"
           style={{ marginLeft: "5vw" }}
-          aria-label="Retouchメンバーズサイト"
+          aria-label="Retouchメンバーズサイト 公式リニューアル版"
         >
           <Image
             src="/logo.png"
@@ -37,6 +37,12 @@ export default async function SiteHeader() {
             priority
             className="h-12 w-auto"
           />
+          <span
+            className="hidden sm:inline-flex items-center rounded-[4px] border border-brand/30 bg-brand-50 px-2 py-0.5 text-[11px] font-bold tracking-wide text-brand-dark"
+            title="retouch-members.com の公式リニューアル版"
+          >
+            公式リニューアル版
+          </span>
         </Link>
 
         {session ? (
