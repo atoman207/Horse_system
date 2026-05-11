@@ -1,9 +1,27 @@
 import CsvTools from "./CsvTools";
+import LegacyMigrationTool from "./LegacyMigrationTool";
 
 export default function CsvPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold">CSV 入出力</h1>
+
+      <div className="card border-amber-300 border-2">
+        <h2 className="section-title">既存CSV移行（管理スプレッドシート取込）</h2>
+        <p className="text-sm text-ink-soft mb-3">
+          既存の <code>管理データー【管理厳重】.xlsx</code> を CSV
+          書き出ししたファイルをそのまま取込めます。<br />
+          日本語ヘッダ（氏名 / メール / 馬名 / 口数 / ランク / 住所 / 郵便番号 /
+          契約日 / 状態）を自動で項目対応し、顧客 → 契約 → 支援サブスクリプションを
+          まとめて作成します。
+        </p>
+        <ol className="list-decimal list-inside text-sm text-ink-soft mb-3 space-y-1">
+          <li>CSV を選択し、<strong>プレビュー（dry-run）</strong> で差分・警告を確認</li>
+          <li>問題なければ <strong>本番取込</strong> で書き込み（再実行しても重複しません）</li>
+          <li>取込後は下の各カードで個別 CSV を出力／差分取込できます</li>
+        </ol>
+        <LegacyMigrationTool />
+      </div>
 
       <div className="card">
         <h2 className="section-title">顧客データ</h2>
